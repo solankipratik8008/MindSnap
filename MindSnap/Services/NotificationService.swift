@@ -14,7 +14,7 @@
 //    Low = quiet subtle sound
 // 2. Priority-based notification style
 // 3. Deep link URLs in all notifications
-// 4. Medicine gets special urgent treatment
+// 4. Medicine gets special reminder wording
 // 5. Multiple reminders per goal maintained
 // ============================================================
 
@@ -39,14 +39,27 @@ class NotificationService {
         do {
             let granted = try await UNUserNotificationCenter
                 .current()
-                .requestAuthorization(
-                    options: [.alert, .sound, .badge]
-                )
+                .requestAuthorization(options: [.alert, .sound, .badge])
             await MainActor.run { isAuthorized = granted }
             return granted
         } catch {
             return false
         }
+    }
+
+    func hasNotificationAuthorization() async -> Bool {
+        let settings = await UNUserNotificationCenter
+            .current()
+            .notificationSettings()
+        let authorized =
+            settings.authorizationStatus == .authorized ||
+            settings.authorizationStatus == .provisional ||
+            settings.authorizationStatus == .ephemeral
+
+        await MainActor.run {
+            isAuthorized = authorized
+        }
+        return authorized
     }
 
     func checkAuthorizationStatus() async {
@@ -56,7 +69,8 @@ class NotificationService {
         await MainActor.run {
             isAuthorized =
                 settings.authorizationStatus == .authorized ||
-                settings.authorizationStatus == .provisional
+                settings.authorizationStatus == .provisional ||
+                settings.authorizationStatus == .ephemeral
         }
     }
 
@@ -119,7 +133,7 @@ class NotificationService {
         priority: GoalPriority = .medium,
         reminders: [ReminderTime]
     ) async {
-        guard isAuthorized else { return }
+        guard await hasNotificationAuthorization() else { return }
         cancelGoalReminders(goalID: goalID)
 
         for reminder in reminders {
@@ -178,9 +192,9 @@ class NotificationService {
             }
 
         case .low:
-            content.sound = nil
+            content.sound = .default
             if #available(iOS 15.0, *) {
-                content.interruptionLevel = .passive
+                content.interruptionLevel = .active
             }
         }
 
@@ -479,9 +493,9 @@ class NotificationService {
             if activityType == .medicine {
                 let medicineMessages = [
                     "💊 Time for your medication! Don't skip your dose.",
-                    "💊 Medication reminder — your health depends on it!",
+                    "💊 Medication reminder — take it as scheduled.",
                     "💊 Don't forget your medicine. Take it now!",
-                    "💊 Medication time! Consistency is key to recovery."
+                    "💊 Medication time! Follow your saved schedule."
                 ]
                 return medicineMessages.randomElement()
                     ?? medicineMessages[0]
@@ -541,7 +555,7 @@ class NotificationService {
             let msgs = [
                 "Time to wind down for bed 🌙",
                 "Good sleep = great tomorrow. Rest up!",
-                "Your body needs recovery. Bedtime! 😴",
+                "Your body needs rest. Bedtime! 😴",
                 "Sweet dreams ahead. Time for sleep ⭐"
             ]
             return msgs.randomElement() ?? msgs[0]

@@ -287,8 +287,8 @@ struct AddGoalView: View {
                         .fill(
                             LinearGradient(
                                 colors: [
-                                    preset.category.color.opacity(colorScheme == .dark ? 0.35 : 0.2),
-                                    preset.category.secondaryColor.opacity(colorScheme == .dark ? 0.2 : 0.1)
+                                    preset.activityType.color.opacity(colorScheme == .dark ? 0.35 : 0.2),
+                                    preset.activityType.secondaryColor.opacity(colorScheme == .dark ? 0.2 : 0.1)
                                 ],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -299,8 +299,8 @@ struct AddGoalView: View {
                     Image(systemName: preset.sfSymbol)
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(
-                            preset.category.color,
-                            preset.category.secondaryColor
+                            preset.activityType.color,
+                            preset.activityType.secondaryColor
                         )
                         .font(.system(size: 18))
 
@@ -1345,7 +1345,6 @@ struct AddGoalView: View {
         case "miles":   return [1, 3, 5, 10]
         case "pages":   return [10, 20, 30, 50]
         case "ml":      return [500, 1000, 1500, 2000]
-        case "laps":    return [10, 20, 30, 40]
         default:        return [1, 2, 3, 5]
         }
     }

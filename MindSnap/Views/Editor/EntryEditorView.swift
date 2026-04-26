@@ -163,7 +163,7 @@ struct RichTextEditor: UIViewRepresentable {
             }
 
             button.frame = CGRect(
-                x: 0, y: 0, width: 36, height: 36
+                x: 0, y: 0, width: title == nil ? 36 : 56, height: 36
             )
             return UIBarButtonItem(customView: button)
         }
@@ -214,7 +214,7 @@ struct RichTextEditor: UIViewRepresentable {
             btn(icon: "mic", tag: 8),
             space,
             // Dismiss keyboard
-            btn(icon: "keyboard.chevron.compact.down", tag: 9)
+            btn(icon: "", tag: 9, title: "Done")
         ]
 
         toolbar.items = items
@@ -475,6 +475,15 @@ struct EntryEditorView: View {
 
                 // Voice button
                 Button {
+                    dismissKeyboard()
+                } label: {
+                    Image(systemName: "keyboard.chevron.compact.down")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+
+                Button {
                     Task { await speechService.toggleRecording() }
                 } label: {
                     Image(systemName:
@@ -543,11 +552,15 @@ struct EntryEditorView: View {
         case .voice:
             Task { await speechService.toggleRecording() }
         case .dismiss:
-            UIApplication.shared.sendAction(
-                #selector(UIResponder.resignFirstResponder),
-                to: nil, from: nil, for: nil
-            )
+            dismissKeyboard()
         }
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil, from: nil, for: nil
+        )
     }
 
     // --------------------------------------------------------

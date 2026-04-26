@@ -711,12 +711,13 @@ struct CalendarMoodView: View {
         guard let date = calendar.date(from: components) else {
             return nil
         }
-        return JournalEntry(
-            date: date,
+        let entry = JournalEntry(
             text: text,
             moodType: mood,
             sentimentScore: score
         )
+        entry.date = date
+        return entry
     }
 
     ScrollView {

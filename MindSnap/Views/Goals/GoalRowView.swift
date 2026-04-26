@@ -33,12 +33,21 @@ struct GoalRowView: View {
     @State private var showingLockedWarning = false
     @State private var expiryPulse = false
     @State private var showingManualEditSheet = false
-    @State private var manualEditValue: Int = 0
+    @State private var manualEditValue: Double = 0
+    @State private var manualEditText: String = "0"
+    @FocusState private var isManualEditFocused: Bool
 
     @Environment(\.colorScheme) private var colorScheme
 
-    private var todaysProgress: Int {
-        viewModel.todaysProgress(for: goal)
+    private var isHealthTrackedGoal: Bool {
+        goal.isHealthKitLinked ||
+        goal.activityType == .walking ||
+        goal.activityType == .running ||
+        goal.activityType == .cycling
+    }
+
+    private var todaysProgress: Double {
+        viewModel.todaysProgressValue(for: goal)
     }
 
     private var isCompleted: Bool {
@@ -107,6 +116,7 @@ struct GoalRowView: View {
                 startExpiryPulse()
             }
             manualEditValue = todaysProgress
+            manualEditText = formattedProgress(todaysProgress)
         }
         .sheet(isPresented: $showingManualEditSheet) {
             honestyEditSheet
@@ -558,7 +568,26 @@ struct GoalRowView: View {
         .scaleEffect(isPressed ? 0.85 : 1.0)
     }
 
+    @ViewBuilder
     private var progressControl: some View {
+        if isHealthTrackedGoal {
+            VStack(spacing: 1) {
+                Text(formattedProgress(todaysProgress))
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundStyle(isCompleted ? goal.color : .primary)
+                    .contentTransition(.numericText())
+                    .animation(.spring(duration: 0.3), value: todaysProgress)
+                    .frame(minWidth: 52)
+
+                if !goal.unit.isEmpty {
+                    Text("/ \(formattedProgress(Double(goal.targetValue))) \(goal.unit)")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        } else {
         HStack(spacing: 8) {
             Button {
                 if isLocked {
@@ -581,7 +610,7 @@ struct GoalRowView: View {
             .disabled(todaysProgress == 0 && !isLocked)
 
             VStack(spacing: 1) {
-                Text("\(todaysProgress)")
+                Text(formattedProgress(todaysProgress))
                     .font(.title3)
                     .fontWeight(.bold)
                     .foregroundStyle(
@@ -595,7 +624,7 @@ struct GoalRowView: View {
                     .frame(minWidth: 28)
 
                 if !goal.unit.isEmpty {
-                    Text("/ \(goal.targetValue) \(goal.unit)")
+                    Text("/ \(formattedProgress(Double(goal.targetValue))) \(goal.unit)")
                         .font(.system(size: 9))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -625,6 +654,7 @@ struct GoalRowView: View {
                 )
             }
             .buttonStyle(.plain)
+        }
         }
     }
 
@@ -688,7 +718,7 @@ struct GoalRowView: View {
             Spacer()
 
             let pct = Int(
-                Double(todaysProgress) /
+                todaysProgress /
                 Double(max(1, goal.targetValue)) * 100
             )
             Text("\(pct)%")
@@ -712,6 +742,7 @@ struct GoalRowView: View {
     private var manualEditButton: some View {
         Button {
             manualEditValue = todaysProgress
+            manualEditText = formattedProgress(todaysProgress)
             showingManualEditSheet = true
         } label: {
             HStack(spacing: 5) {
@@ -783,57 +814,34 @@ struct GoalRowView: View {
                         .font(.subheadline)
                         .fontWeight(.semibold)
 
-                    HStack(spacing: 20) {
-                        Button {
-                            if manualEditValue > 0 {
-                                manualEditValue -= 1
-                            }
-                        } label: {
-                            Image(systemName:
-                                "minus.circle.fill"
-                            )
-                            .font(.largeTitle)
+                    VStack(spacing: 8) {
+                        TextField("0", text: $manualEditText)
+                            .keyboardType(allowsDecimalProgress ? .decimalPad : .numberPad)
+                            .focused($isManualEditFocused)
+                            .multilineTextAlignment(.center)
+                            .font(.system(size: 42, weight: .bold, design: .rounded))
                             .foregroundStyle(goal.color)
-                        }
-                        .buttonStyle(.plain)
-
-                        VStack(spacing: 4) {
-                            Text("\(manualEditValue)")
-                                .font(.system(
-                                    size: 48,
-                                    weight: .bold,
-                                    design: .rounded
-                                ))
-                                .foregroundStyle(goal.color)
-                                .contentTransition(.numericText())
-                                .animation(
-                                    .spring(duration: 0.3),
-                                    value: manualEditValue
-                                )
-
-                            Text(goal.unit)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(minWidth: 80)
-
-                       
-                        Button {
-                            if manualEditValue < goal.targetValue * 2 {
-                                manualEditValue += 1
-                            }
-                        } label: {
-                            Image(systemName:
-                                "plus.circle.fill"
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(.secondarySystemBackground))
                             )
-                            .font(.largeTitle)
-                            .foregroundStyle(goal.color)
+                            .onChange(of: manualEditText) { _, newValue in
+                                updateManualEditValue(from: newValue)
+                            }
+
+                        HStack(spacing: 4) {
+                            Text("Target: \(formattedProgress(Double(goal.targetValue)))")
+                            if !goal.unit.isEmpty {
+                                Text(goal.unit)
+                            }
                         }
-                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
 
                     if manualEditValue > 0 {
-                        if manualEditValue >= goal.targetValue {
+                        if manualEditValue >= Double(goal.targetValue) {
                             Text(
                                 "🎉 Full " +
                                 "\(goal.pointsPerCompletion)" +
@@ -843,9 +851,7 @@ struct GoalRowView: View {
                             .fontWeight(.semibold)
                             .foregroundStyle(.green)
                         } else {
-                            let pts = goal.partialPoints(
-                                for: manualEditValue
-                            )
+                            let pts = goal.partialPoints(for: manualEditValue)
                             if pts > 0 {
                                 Text(
                                     "~\(pts) partial pts " +
@@ -867,6 +873,8 @@ struct GoalRowView: View {
                 Spacer()
 
                 Button {
+                    isManualEditFocused = false
+                    updateManualEditValue(from: manualEditText)
                     showingManualEditSheet = false
                     DispatchQueue.main.asyncAfter(
                         deadline: .now() + 0.3
@@ -897,7 +905,7 @@ struct GoalRowView: View {
                                 )
                         )
                 }
-                .disabled(manualEditValue == 0)
+                .disabled(!isManualEditValid)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 20)
             }
@@ -912,6 +920,12 @@ struct GoalRowView: View {
                         showingManualEditSheet = false
                     }
                     .foregroundStyle(.secondary)
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        isManualEditFocused = false
+                    }
                 }
             }
         }
@@ -1182,6 +1196,65 @@ struct GoalRowView: View {
         }
     }
 
+    private var isManualEditValid: Bool {
+        guard let value = Double(manualEditText), value >= 0 else {
+            return false
+        }
+        return value <= Double(max(goal.targetValue * 2, goal.targetValue, 1))
+    }
+
+    private func updateManualEditValue(from text: String) {
+        let sanitized = sanitizedManualInput(text)
+        if sanitized != text {
+            manualEditText = sanitized
+            return
+        }
+
+        guard let value = Double(sanitized) else {
+            manualEditValue = 0
+            return
+        }
+
+        let maxValue = Double(max(goal.targetValue * 2, goal.targetValue, 1))
+        if value > maxValue {
+            manualEditValue = maxValue
+            manualEditText = formattedProgress(maxValue)
+        } else {
+            manualEditValue = value
+        }
+    }
+
+    private func sanitizedManualInput(_ text: String) -> String {
+        var result = ""
+        var hasDecimal = false
+
+        for character in text {
+            if character.isNumber {
+                result.append(character)
+            } else if allowsDecimalProgress && character == "." && !hasDecimal {
+                hasDecimal = true
+                result.append(character)
+            }
+        }
+
+        return result
+    }
+
+    private var allowsDecimalProgress: Bool {
+        let normalized = goal.unit.lowercased()
+        return normalized == "km" ||
+            normalized == "miles" ||
+            normalized == "mi" ||
+            normalized == "l"
+    }
+
+    private func formattedProgress(_ value: Double) -> String {
+        if allowsDecimalProgress {
+            return value.formatted(.number.precision(.fractionLength(0...1)))
+        }
+        return Int(value.rounded(.down)).formatted(.number)
+    }
+
     private func startExpiryPulse() {
         withAnimation(
             .easeInOut(duration: 1.0)
@@ -1224,13 +1297,15 @@ struct GoalRowView: View {
             )
             GoalRowView(
                 goal: Goal(
-                    name: "Take Medicine",
-                    emoji: "💊",
-                    sfSymbol: "pills.fill",
-                    category: .health,
-                    goalType: .checkbox,
-                    activityType: .medicine,
-                    priority: .high
+                    name: "Read",
+                    emoji: "📚",
+                    sfSymbol: "book.fill",
+                    category: .mind,
+                    goalType: .progress,
+                    activityType: .reading,
+                    priority: .medium,
+                    targetValue: 30,
+                    unit: "min"
                 ),
                 viewModel: vm
             )

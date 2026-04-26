@@ -50,6 +50,7 @@ class GoalViewModel {
     var showingHonestyPopup: Bool = false
     var pendingManualGoal: Goal? = nil
     var pendingManualValue: Int = 0
+    var pendingManualValueDouble: Double = 0
 
     // ---- Partial points ----
     var partialPointsPreview: Int = 0
@@ -146,13 +147,21 @@ class GoalViewModel {
 
     // ---- Today's progress ----
     func todaysProgress(for goal: Goal) -> Int {
+        Int(todaysProgressValue(for: goal).rounded(.down))
+    }
+
+    func todaysProgressValue(for goal: Goal) -> Double {
         let today = Calendar.current.startOfDay(for: Date())
-        return completions.first {
+        if let completion = completions.first(where: {
             $0.goalID == goal.id &&
             Calendar.current.startOfDay(
                 for: $0.completedAt
             ) == today
-        }?.currentValue ?? 0
+        }) {
+            return completion.progressValue
+        }
+
+        return goal.currentProgressValue
     }
 
     // ---- Today's completion record ----
@@ -200,7 +209,7 @@ class GoalViewModel {
 
     // ---- Partial points for a goal ----
     func partialPointsFor(_ goal: Goal) -> Int {
-        let progress = todaysProgress(for: goal)
+        let progress = todaysProgressValue(for: goal)
         guard progress > 0 && !isCompletedToday(goal) else {
             return 0
         }
@@ -645,6 +654,9 @@ class GoalViewModel {
             else { return }
 
             existing.currentValue += 1
+            existing.currentValueDouble = Double(existing.currentValue)
+            goal.currentValue = existing.currentValue
+            goal.currentValueDouble = Double(existing.currentValue)
 
             if existing.currentValue >= goal.targetValue &&
                !existing.isPointsAwarded {
@@ -660,7 +672,7 @@ class GoalViewModel {
             } else {
                 showPartialPointsPreview(
                     goal: goal,
-                    value: existing.currentValue
+                    value: Double(existing.currentValue)
                 )
                 UIImpactFeedbackGenerator(style: .light)
                     .impactOccurred()
@@ -680,6 +692,8 @@ class GoalViewModel {
                 toggleCount: 1
             )
             modelContext.insert(c)
+            goal.currentValue = 1
+            goal.currentValueDouble = 1
 
             if isComplete {
                 awardPoints(goal.pointsPerCompletion)
@@ -722,14 +736,17 @@ class GoalViewModel {
 
         guard existing.currentValue > 0 else { return }
         existing.currentValue -= 1
+        existing.currentValueDouble = Double(existing.currentValue)
+        goal.currentValue = existing.currentValue
+        goal.currentValueDouble = Double(existing.currentValue)
         existing.isCompleted =
             existing.currentValue >= goal.targetValue
 
         if existing.currentValue > 0 {
-            showPartialPointsPreview(
-                goal: goal,
-                value: existing.currentValue
-            )
+                showPartialPointsPreview(
+                    goal: goal,
+                    value: Double(existing.currentValue)
+                )
         }
 
         // ---- SAVE IMMEDIATELY ----
@@ -743,8 +760,13 @@ class GoalViewModel {
     // MARK: - Manual Override (Honesty)
     // --------------------------------------------------------
     func requestManualOverride(goal: Goal, newValue: Int) {
+        requestManualOverride(goal: goal, newValue: Double(newValue))
+    }
+
+    func requestManualOverride(goal: Goal, newValue: Double) {
         pendingManualGoal = goal
-        pendingManualValue = newValue
+        pendingManualValue = Int(newValue.rounded(.down))
+        pendingManualValueDouble = newValue
         honestyMessage = honestyMessages.randomElement()
             ?? honestyMessages[0]
         withAnimation(.spring(duration: 0.4, bounce: 0.3)) {
@@ -754,7 +776,7 @@ class GoalViewModel {
 
     func confirmManualOverride() {
         guard let goal = pendingManualGoal else { return }
-        let value = pendingManualValue
+        let value = pendingManualValueDouble
 
         withAnimation { showingHonestyPopup = false }
 
@@ -766,11 +788,14 @@ class GoalViewModel {
             calendar.startOfDay(for: $0.completedAt) == today
         }) {
             let wasCompleted = existing.isCompleted
-            existing.currentValue = value
+            existing.currentValue = Int(value.rounded(.down))
+            existing.currentValueDouble = value
+            goal.currentValue = Int(value.rounded(.down))
+            goal.currentValueDouble = value
             existing.completionSourceRaw =
                 CompletionSource.edited.rawValue
 
-            if value >= goal.targetValue && !wasCompleted {
+            if value >= Double(goal.targetValue) && !wasCompleted {
                 existing.isCompleted = true
                 if !existing.isPointsAwarded {
                     existing.isPointsAwarded = true
@@ -781,18 +806,19 @@ class GoalViewModel {
                         goal.pointsPerCompletion
                 }
                 checkAllGoalsCompleted()
-            } else if value < goal.targetValue {
+            } else if value < Double(goal.targetValue) {
                 existing.isCompleted = false
                 showPartialPointsPreview(
                     goal: goal, value: value
                 )
             }
         } else {
-            let isComplete = value >= goal.targetValue
+            let isComplete = value >= Double(goal.targetValue)
             let c = GoalCompletion(
                 goalID: goal.id,
                 goalName: goal.name,
-                currentValue: value,
+                currentValue: Int(value.rounded(.down)),
+                currentValueDouble: value,
                 targetValue: goal.targetValue,
                 pointsEarned: isComplete
                     ? goal.pointsPerCompletion : 0,
@@ -802,6 +828,8 @@ class GoalViewModel {
                 toggleCount: 1
             )
             modelContext.insert(c)
+            goal.currentValue = Int(value.rounded(.down))
+            goal.currentValueDouble = value
 
             if isComplete {
                 awardPoints(goal.pointsPerCompletion)
@@ -821,12 +849,14 @@ class GoalViewModel {
 
         pendingManualGoal = nil
         pendingManualValue = 0
+        pendingManualValueDouble = 0
     }
 
     func cancelManualOverride() {
         withAnimation { showingHonestyPopup = false }
         pendingManualGoal = nil
         pendingManualValue = 0
+        pendingManualValueDouble = 0
     }
 
     // --------------------------------------------------------
@@ -930,7 +960,7 @@ class GoalViewModel {
                 continue
             }
 
-            let value = Int(metric.value.rounded(.down))
+            let value = normalizedHealthValue(metric.value, unit: goal.unit)
             guard value > 0 else { continue }
 
             await MainActor.run {
@@ -1030,7 +1060,7 @@ class GoalViewModel {
 
     private func showPartialPointsPreview(
         goal: Goal,
-        value: Int
+        value: Double
     ) {
         let partial = goal.partialPoints(for: value)
         if partial > 0 {
@@ -1071,46 +1101,60 @@ class GoalViewModel {
     }
 
     private func applyHealthProgress(
-        _ value: Int,
+        _ value: Double,
         to goal: Goal
     ) {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let clampedValue = max(0, value)
 
+        goal.currentValue = Int(clampedValue.rounded(.down))
+        goal.currentValueDouble = clampedValue
+
         if let existing = todaysCompletionRecord(for: goal) {
-            guard clampedValue > existing.currentValue else {
+
+            // Only update if new value is higher
+            guard clampedValue > existing.progressValue else {
                 return
             }
-            existing.currentValue = clampedValue
+
+            existing.currentValue = Int(clampedValue.rounded(.down))
+            existing.currentValueDouble = clampedValue
             existing.completionSourceRaw =
                 CompletionSource.automatic.rawValue
 
-            if clampedValue >= goal.targetValue &&
+            if clampedValue >= Double(goal.targetValue) &&
                !existing.isPointsAwarded {
+
                 existing.isCompleted = true
                 existing.isPointsAwarded = true
                 existing.pointsEarned = goal.pointsPerCompletion
+
                 awardPoints(goal.pointsPerCompletion)
                 goal.totalPointsEarned += goal.pointsPerCompletion
+
                 checkAllGoalsCompleted()
             }
+
         } else {
-            let isComplete = clampedValue >= goal.targetValue
+
+            let isComplete = clampedValue >= Double(goal.targetValue)
+
             let completion = GoalCompletion(
                 goalID: goal.id,
                 goalName: goal.name,
-                currentValue: clampedValue,
+                currentValue: Int(clampedValue.rounded(.down)),
+                currentValueDouble: clampedValue,
                 targetValue: goal.targetValue,
                 pointsEarned: isComplete
-                    ? goal.pointsPerCompletion
-                    : 0,
+                    ? goal.pointsPerCompletion : 0,
                 isCompleted: isComplete,
                 completionSource: .automatic,
                 isPointsAwarded: isComplete,
                 toggleCount: 0,
                 completedAt: today
             )
+
             modelContext.insert(completion)
 
             if isComplete {
@@ -1119,5 +1163,20 @@ class GoalViewModel {
                 checkAllGoalsCompleted()
             }
         }
+    }
+
+    private func normalizedHealthValue(_ value: Double, unit: String) -> Double {
+        if isDecimalUnit(unit) {
+            return (value * 10).rounded(.down) / 10
+        }
+        return value.rounded(.down)
+    }
+
+    private func isDecimalUnit(_ unit: String) -> Bool {
+        let normalized = unit.lowercased()
+        return normalized == "km" ||
+            normalized == "miles" ||
+            normalized == "mi" ||
+            normalized == "l"
     }
 }

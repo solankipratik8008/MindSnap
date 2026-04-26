@@ -1,0 +1,17 @@
+# Xcode user-specific state
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+*.xcscmblueprint
+xcuserdata/
+*.xcbkptlist
+
+# macOS
+.DS_Store
+
+# Local environment/secrets
+.env
+.env.*
+*.p8
+*.p12
+*.mobileprovision

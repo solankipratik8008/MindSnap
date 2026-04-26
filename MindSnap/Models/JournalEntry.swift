@@ -1,19 +1,3 @@
-//
-//  JournalEntry.swift
-//  MindSnap
-//
-//  Created by Pratik Solanki on 2026-04-21.
-//
-
-// ============================================================
-// JournalEntry.swift
-// MindSnap — UPDATED WITH isPinned
-//
-// WHAT CHANGED:
-// Added isPinned property so users can pin important
-// journal entries to the top of their list.
-// ============================================================
-
 import SwiftData
 import Foundation
 
@@ -23,53 +7,44 @@ class JournalEntry {
     // --------------------------------------------------------
     // id — Unique identifier
     // --------------------------------------------------------
-    var id: UUID
+
+    var id: UUID = UUID()
 
     // --------------------------------------------------------
     // date — When the entry was written
     // --------------------------------------------------------
-    var date: Date
+    var date: Date = Date()
 
     // --------------------------------------------------------
     // text — The actual journal entry content
     // --------------------------------------------------------
-    var text: String
+    var text: String = ""
 
     // Optional archived rich text for formatting and inline images.
-    var richTextData: Data?
+    var richTextData: Data? = nil
 
     // --------------------------------------------------------
-    // moodType — The detected emotional mood
+    // moodType — STORED AS STRING (CloudKit safe)
     // --------------------------------------------------------
-    var moodType: MoodType
+    var moodTypeRaw: String = MoodType.neutral.rawValue
 
     // --------------------------------------------------------
-    // sentimentScore — Raw score from NaturalLanguage
-    // Range: -1.0 (very negative) to +1.0 (very positive)
+    // sentimentScore
     // --------------------------------------------------------
-    var sentimentScore: Double
+    var sentimentScore: Double = 0.0
 
     // --------------------------------------------------------
-    // tags — User applied labels
-    // Can include text tags AND emoji tags
+    // tags
     // --------------------------------------------------------
-    var tags: [String]
+    var tags: [String] = []
 
     // --------------------------------------------------------
-    // reflectionPromptUsed — Which prompt user picked
-    // nil = no prompt used
+    // reflectionPromptUsed
     // --------------------------------------------------------
-    var reflectionPromptUsed: String?
+    var reflectionPromptUsed: String? = nil
 
     // --------------------------------------------------------
-    // isPinned — Whether this entry is pinned to top
-    //
-    // NEW FEATURE:
-    // true  = pinned → shown in "Pinned" section at top
-    // false = normal → sorted by date (newest first)
-    //
-    // User pins by swiping right on an entry row.
-    // Default is false — entries start unpinned.
+    // isPinned
     // --------------------------------------------------------
     var isPinned: Bool = false
 
@@ -77,21 +52,23 @@ class JournalEntry {
     // MARK: - Computed Properties
     // --------------------------------------------------------
 
-    // Full readable date — "Wednesday, April 22, 2026"
+    var moodType: MoodType {
+        get { MoodType(rawValue: moodTypeRaw) ?? .neutral }
+        set { moodTypeRaw = newValue.rawValue }
+    }
+
     var formattedDate: String {
         let formatter = DateFormatter()
         formatter.dateStyle = .full
         return formatter.string(from: date)
     }
 
-    // Short date for small spaces — "Apr 22"
     var shortDate: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d"
         return formatter.string(from: date)
     }
 
-    // First 100 characters of entry text
     var previewText: String {
         return String(text.prefix(100))
     }
@@ -100,8 +77,6 @@ class JournalEntry {
     // MARK: - Initializer
     // --------------------------------------------------------
     init(
-        id: UUID = UUID(),
-        date: Date = Date(),
         text: String,
         richTextData: Data? = nil,
         moodType: MoodType = .neutral,
@@ -110,11 +85,9 @@ class JournalEntry {
         reflectionPromptUsed: String? = nil,
         isPinned: Bool = false
     ) {
-        self.id = id
-        self.date = date
         self.text = text
         self.richTextData = richTextData
-        self.moodType = moodType
+        self.moodTypeRaw = moodType.rawValue
         self.sentimentScore = sentimentScore
         self.tags = tags
         self.reflectionPromptUsed = reflectionPromptUsed

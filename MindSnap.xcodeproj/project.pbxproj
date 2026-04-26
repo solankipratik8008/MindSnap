@@ -73,8 +73,11 @@
 			membershipExceptions = (
 				Models/Goal.swift,
 				Models/GoalCompletion.swift,
+				Models/GoalEnums.swift,
 				Models/JournalEntry.swift,
 				Models/MoodType.swift,
+				Models/PresetGoal.swift,
+				Models/ReminderTime.swift,
 				Widget/MindSnapWidget.swift,
 				Widget/WidgetEntry.swift,
 			);

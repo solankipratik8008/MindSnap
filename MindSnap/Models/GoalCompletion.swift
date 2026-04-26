@@ -43,6 +43,7 @@ class GoalCompletion {
 
     // ---- Progress ----
     var currentValue: Int = 0
+    var currentValueDouble: Double = 0
     var targetValue: Int = 1
 
     // ---- Points ----
@@ -72,8 +73,12 @@ class GoalCompletion {
         guard targetValue > 0 else { return 0 }
         return min(
             1.0,
-            Double(currentValue) / Double(targetValue)
+            progressValue / Double(targetValue)
         )
+    }
+
+    var progressValue: Double {
+        currentValueDouble > 0 ? currentValueDouble : Double(currentValue)
     }
 
     var isPartialCompletion: Bool {
@@ -92,6 +97,7 @@ class GoalCompletion {
         goalID: UUID,
         goalName: String = "",
         currentValue: Int = 0,
+        currentValueDouble: Double? = nil,
         targetValue: Int = 1,
         pointsEarned: Int = 0,
         isCompleted: Bool = false,
@@ -107,6 +113,7 @@ class GoalCompletion {
         self.goalID = goalID
         self.goalName = goalName
         self.currentValue = currentValue
+        self.currentValueDouble = currentValueDouble ?? Double(currentValue)
         self.targetValue = targetValue
         self.pointsEarned = pointsEarned
         self.isCompleted = isCompleted

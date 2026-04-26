@@ -36,6 +36,8 @@ struct CrisisResource {
 
 import SwiftUI
 import SwiftData
+import UserNotifications
+import WidgetKit
 
 enum AppColorScheme: String, CaseIterable {
     case light  = "Light"
@@ -86,7 +88,9 @@ struct SettingsView: View {
 
     // ---- UI State ----
     @State private var showingClearDataAlert = false
+    @State private var showingDeleteAccountAlert = false
     @State private var showingDataClearedConfirmation = false
+    @State private var showingAccountDeletedConfirmation = false
     @State private var showingNameEditor = false
     @State private var showingNotificationDeniedAlert = false
     @State private var showingHealthPermissionAlert = false
@@ -125,17 +129,32 @@ struct SettingsView: View {
 
         .alert("Clear All Data", isPresented: $showingClearDataAlert) {
             Button("Delete Everything", role: .destructive) {
-                clearAllData()
+                clearJournalData()
             }
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("This will permanently delete ALL journal entries.")
         }
 
+        .alert("Delete Account & All Data?", isPresented: $showingDeleteAccountAlert) {
+            Button("Delete Everything", role: .destructive) {
+                deleteAccountAndAllData()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("MindSnap does not create a separate server account, but this will permanently delete all MindSnap data on this device, including journal entries, goals, progress, reminders, points, preferences, and locally stored sync records. If iCloud sync is enabled, deletions are saved so they can sync through CloudKit.")
+        }
+
         .alert("Data Cleared", isPresented: $showingDataClearedConfirmation) {
             Button("OK", role: .cancel) { }
         } message: {
             Text("All journal entries have been deleted.")
+        }
+
+        .alert("MindSnap Data Deleted", isPresented: $showingAccountDeletedConfirmation) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("All MindSnap data and local reminders have been deleted. Health permissions are controlled by iOS Settings and can be changed there anytime.")
         }
 
         .alert("Notifications Disabled", isPresented: $showingNotificationDeniedAlert) {
@@ -432,10 +451,33 @@ struct SettingsView: View {
                     }
                 }
             }
+
+            Button(role: .destructive) {
+                showingDeleteAccountAlert = true
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Delete Account & All Data")
+                            .foregroundStyle(.red)
+                        Text("Delete journals, goals, progress, reminders, points, and preferences")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 7)
+                            .fill(Color.red.opacity(0.9))
+                            .frame(width: 28, height: 28)
+                        Image(systemName: "person.crop.circle.badge.xmark")
+                            .foregroundStyle(.white)
+                            .font(.system(size: 14))
+                    }
+                }
+            }
         } header: {
             Text("Data")
         } footer: {
-            Text("All data is stored locally. MindSnap never uploads your entries.")
+            Text("MindSnap does not create a separate server account. Deleting all data removes MindSnap records from this device; if iCloud sync is enabled, saved deletions can sync through Apple's CloudKit service.")
         }
     }
 
@@ -464,10 +506,25 @@ struct SettingsView: View {
                 }
             }
             .tint(.red)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Health Data Privacy", systemImage: "lock.shield.fill")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+
+                Text("MindSnap reads your Health data only to update your goal progress.")
+                Text("MindSnap does not sell or share Health data.")
+                Text("Health access is optional.")
+                Text("You can disable Health permissions anytime in iPhone Settings.")
+                Text("If Health access is off, manual progress entry still works.")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.vertical, 6)
         } header: {
             Text("Health")
         } footer: {
-            Text("MindSnap reads only selected Apple Health activity totals, such as steps, distance, exercise minutes, and water, to update matching goals. It never writes health data.")
+            Text("MindSnap reads selected Apple Health activity totals, such as steps, distance, exercise minutes, and water. It never writes Health data.")
         }
     }
 
@@ -799,7 +856,7 @@ struct SettingsView: View {
         }
     }
 
-    private func clearAllData() {
+    private func clearJournalData() {
         do {
             let allEntries = try modelContext.fetch(
                 FetchDescriptor<JournalEntry>()
@@ -812,6 +869,75 @@ struct SettingsView: View {
         } catch {
             print("Failed to clear data: \(error)")
         }
+    }
+
+    private func deleteAccountAndAllData() {
+        do {
+            let allEntries = try modelContext.fetch(FetchDescriptor<JournalEntry>())
+            for entry in allEntries {
+                modelContext.delete(entry)
+            }
+
+            let allGoals = try modelContext.fetch(FetchDescriptor<Goal>())
+            for goal in allGoals {
+                modelContext.delete(goal)
+            }
+
+            let allCompletions = try modelContext.fetch(FetchDescriptor<GoalCompletion>())
+            for completion in allCompletions {
+                modelContext.delete(completion)
+            }
+
+            try modelContext.save()
+
+            clearMindSnapPreferences()
+            clearNotifications()
+            WidgetCenter.shared.reloadAllTimelines()
+
+            showingAccountDeletedConfirmation = true
+        } catch {
+            print("Failed to delete account data: \(error)")
+        }
+    }
+
+    private func clearMindSnapPreferences() {
+        let keys = [
+            "isFaceIDEnabled",
+            "showMoodOnHome",
+            "isDailyReminderEnabled",
+            "isHealthSyncEnabled",
+            "reminderHour",
+            "userName",
+            "appColorScheme",
+            "hasCompletedOnboarding",
+            "hasSeenTutorial",
+            "lastActiveDate",
+            "mindsnap_total_points",
+            "reviewEntriesCount",
+            "reviewFirstLaunchDate",
+            "reviewHasRequested",
+            "reviewLastRequestDate"
+        ]
+
+        for key in keys {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+
+        isFaceIDEnabled = false
+        showMoodOnHome = true
+        isDailyReminderEnabled = false
+        isHealthSyncEnabled = false
+        reminderHour = 20
+        userName = ""
+        appColorScheme = AppColorScheme.system.rawValue
+        UserPoints.reset()
+    }
+
+    private func clearNotifications() {
+        notificationService.cancelDailyReminder()
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+        notificationService.resetBadgeCount()
     }
 
     private func hourLabel(for hour: Int) -> String {
