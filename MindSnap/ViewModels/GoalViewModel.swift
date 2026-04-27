@@ -250,22 +250,34 @@ class GoalViewModel {
     func streakCount(for goal: Goal) -> Int {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        var streak = 0
-        var day = today
-
-        while true {
-            let done = completions.contains {
-                $0.goalID == goal.id &&
-                $0.isCompleted &&
-                calendar.startOfDay(for: $0.completedAt) == day
+        let completedDays = Set(completions.compactMap {
+            completion -> Date? in
+            guard completion.goalID == goal.id,
+                  completion.isCompleted else {
+                return nil
             }
-            if done {
-                streak += 1
-                guard let prev = calendar.date(
-                    byAdding: .day, value: -1, to: day
-                ) else { break }
-                day = prev
-            } else { break }
+            return calendar.startOfDay(for: completion.completedAt)
+        })
+        guard !completedDays.isEmpty else { return 0 }
+
+        let yesterday = calendar.date(
+            byAdding: .day,
+            value: -1,
+            to: today
+        ) ?? today
+        var day = completedDays.contains(today) ? today : yesterday
+        guard completedDays.contains(day) else { return 0 }
+
+        var streak = 0
+
+        while completedDays.contains(day) {
+            streak += 1
+            guard let prev = calendar.date(
+                byAdding: .day,
+                value: -1,
+                to: day
+            ) else { break }
+            day = prev
         }
         return streak
     }
@@ -274,21 +286,31 @@ class GoalViewModel {
     var overallStreak: Int {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
-        var streak = 0
-        var day = today
+        let completedDays = Set(completions.compactMap {
+            completion -> Date? in
+            guard completion.isCompleted else { return nil }
+            return calendar.startOfDay(for: completion.completedAt)
+        })
+        guard !completedDays.isEmpty else { return 0 }
 
-        while true {
-            let done = completions.contains {
-                $0.isCompleted &&
-                calendar.startOfDay(for: $0.completedAt) == day
-            }
-            if done {
-                streak += 1
-                guard let prev = calendar.date(
-                    byAdding: .day, value: -1, to: day
-                ) else { break }
-                day = prev
-            } else { break }
+        let yesterday = calendar.date(
+            byAdding: .day,
+            value: -1,
+            to: today
+        ) ?? today
+        var day = completedDays.contains(today) ? today : yesterday
+        guard completedDays.contains(day) else { return 0 }
+
+        var streak = 0
+
+        while completedDays.contains(day) {
+            streak += 1
+            guard let prev = calendar.date(
+                byAdding: .day,
+                value: -1,
+                to: day
+            ) else { break }
+            day = prev
         }
         return streak
     }
@@ -954,6 +976,8 @@ class GoalViewModel {
 
         _ = await healthKitService.requestAuthorization()
 
+        var didChange = false
+
         for goal in todaysGoals where goal.goalType == .progress {
             guard let metric = await healthKitService.metricForToday(
                 activityType: goal.activityType,
@@ -965,15 +989,20 @@ class GoalViewModel {
             let value = normalizedHealthValue(metric.value, unit: goal.unit)
             guard value > 0 else { continue }
 
-            await MainActor.run {
+            let changed = await MainActor.run {
                 applyHealthProgress(value, to: goal)
+            }
+            if changed {
+                didChange = true
             }
         }
 
-        await MainActor.run {
-            saveContext()
-            fetchCompletions()
-            fetchGoals()
+        if didChange {
+            await MainActor.run {
+                saveContext()
+                fetchCompletions()
+                fetchGoals()
+            }
         }
     }
 
@@ -1105,20 +1134,20 @@ class GoalViewModel {
     private func applyHealthProgress(
         _ value: Double,
         to goal: Goal
-    ) {
+    ) -> Bool {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let clampedValue = max(0, value)
-
-        goal.currentValue = Int(clampedValue.rounded(.down))
-        goal.currentValueDouble = clampedValue
 
         if let existing = todaysCompletionRecord(for: goal) {
 
             // Only update if new value is higher
             guard clampedValue > existing.progressValue else {
-                return
+                return false
             }
+
+            goal.currentValue = Int(clampedValue.rounded(.down))
+            goal.currentValueDouble = clampedValue
 
             existing.currentValue = Int(clampedValue.rounded(.down))
             existing.currentValueDouble = clampedValue
@@ -1138,7 +1167,12 @@ class GoalViewModel {
                 checkAllGoalsCompleted()
             }
 
+            return true
+
         } else {
+
+            goal.currentValue = Int(clampedValue.rounded(.down))
+            goal.currentValueDouble = clampedValue
 
             let isComplete = clampedValue >= Double(goal.targetValue)
 
@@ -1164,6 +1198,8 @@ class GoalViewModel {
                 goal.totalPointsEarned += goal.pointsPerCompletion
                 checkAllGoalsCompleted()
             }
+
+            return true
         }
     }
 

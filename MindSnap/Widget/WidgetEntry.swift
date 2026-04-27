@@ -40,10 +40,10 @@ import SwiftUI   // Required for Color
 // The date tells iOS WHEN to display this snapshot.
 //
 // We add our own custom properties on top:
-//   - todaysMood: what mood to show
+//   - todaysMood: legacy field kept nil for widget privacy
 //   - entryCount: how many entries today
 //   - streakCount: current journaling streak
-//   - lastEntryPreview: short text from latest entry
+//   - lastEntryPreview: legacy field kept nil for widget privacy
 // --------------------------------------------------------
 struct MindSnapWidgetEntry: TimelineEntry {
 
@@ -57,10 +57,9 @@ struct MindSnapWidgetEntry: TimelineEntry {
     let date: Date
 
     // --------------------------------------------------------
-    // todaysMood — The detected mood for today
+    // todaysMood — Kept for compatibility, but intentionally nil
     //
-    // Optional because the user might not have journaled yet.
-    // nil = no entry today → widget shows "No entry yet"
+    // Do not expose private mood data on widgets.
     // --------------------------------------------------------
     let todaysMood: MoodType?
 
@@ -79,10 +78,9 @@ struct MindSnapWidgetEntry: TimelineEntry {
     let streakCount: Int
 
     // --------------------------------------------------------
-    // lastEntryPreview — Short text from the latest entry
+    // lastEntryPreview — Kept for compatibility, but intentionally nil
     //
-    // Shows a snippet of what the user wrote.
-    // Optional because there might be no entries at all.
+    // Do not expose journal text snippets on widgets.
     // --------------------------------------------------------
     let lastEntryPreview: String?
 
@@ -97,9 +95,9 @@ struct MindSnapWidgetEntry: TimelineEntry {
     // --------------------------------------------------------
     static let placeholder = MindSnapWidgetEntry(
         date: Date(),
-        todaysMood: .calm,
+        todaysMood: nil,
         entryCount: 1,
         streakCount: 7,
-        lastEntryPreview: "Feeling peaceful today..."
+        lastEntryPreview: nil
     )
 }

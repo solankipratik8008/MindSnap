@@ -12,8 +12,8 @@
 // WHAT THIS FILE DOES:
 // This file contains everything the widget needs to run:
 //   1. Provider — fetches data and builds a timeline
-//   2. Small widget view — shows today's mood + streak
-//   3. Medium widget view — shows last 3 moods
+//   2. Small widget view — shows private journal shortcut + streak
+//   3. Medium widget view — shows private journal stats
 //   4. Widget configuration — registers the widget with iOS
 //
 // HOW WIDGETS WORK (important concept!):
@@ -161,24 +161,18 @@ struct MindSnapWidgetProvider: @MainActor TimelineProvider {
                 calendar.startOfDay(for: entry.date) == today
             }
 
-            // Get today's dominant mood (most recent entry)
-            let todaysMood = todaysEntries.first?.moodType
-
             // ---- Calculate streak ----
             let streakCount = calculateStreak(
                 from: entries,
                 calendar: calendar
             )
 
-            // ---- Get last entry preview ----
-            let lastPreview = entries.first?.previewText
-
             return MindSnapWidgetEntry(
                 date: Date(),
-                todaysMood: todaysMood,
+                todaysMood: nil,
                 entryCount: todaysEntries.count,
                 streakCount: streakCount,
-                lastEntryPreview: lastPreview
+                lastEntryPreview: nil
             )
 
         } catch {
@@ -205,22 +199,25 @@ struct MindSnapWidgetProvider: @MainActor TimelineProvider {
         let uniqueDays = Set(entries.map { entry in
             calendar.startOfDay(for: entry.date)
         })
+        guard !uniqueDays.isEmpty else { return 0 }
 
-        let sortedDays = uniqueDays.sorted(by: >)
+        let yesterday = calendar.date(
+            byAdding: .day,
+            value: -1,
+            to: today
+        ) ?? today
+        var currentDay = uniqueDays.contains(today) ? today : yesterday
+        guard uniqueDays.contains(currentDay) else { return 0 }
+
         var streak = 0
-        var currentDay = today
 
-        for day in sortedDays {
-            if day == currentDay {
-                streak += 1
-                currentDay = calendar.date(
-                    byAdding: .day,
-                    value: -1,
-                    to: currentDay
-                ) ?? currentDay
-            } else if day < currentDay {
-                break
-            }
+        while uniqueDays.contains(currentDay) {
+            streak += 1
+            currentDay = calendar.date(
+                byAdding: .day,
+                value: -1,
+                to: currentDay
+            ) ?? currentDay
         }
         return streak
     }
@@ -230,7 +227,7 @@ struct MindSnapWidgetProvider: @MainActor TimelineProvider {
 // MARK: - Small Widget View
 //
 // Shown when user picks the SMALL widget size (2x2 grid).
-// Very compact — shows mood emoji, mood name, and streak.
+// Very compact — shows private journal shortcut and streak.
 // ============================================================
 struct MindSnapSmallWidgetView: View {
 
@@ -240,13 +237,9 @@ struct MindSnapSmallWidgetView: View {
     var body: some View {
         ZStack {
             // ---- Background ----
-            // Use mood color as subtle background tint
-            // If no mood yet, use purple (app's brand color)
             ContainerRelativeShape()
                 .fill(
-                    (entry.todaysMood?.color ?? Color.purple)
-                        .opacity(0.15)
-                        .gradient
+                    Color.purple.opacity(0.15).gradient
                 )
 
             VStack(spacing: 8) {
@@ -260,21 +253,14 @@ struct MindSnapSmallWidgetView: View {
 
                 Spacer()
 
-                // ---- Center: Big mood emoji ----
-                Text(entry.todaysMood?.emoji ?? "📓")
-                    .font(.system(size: 44))
+                Image(systemName: "square.and.pencil")
+                    .font(.system(size: 38, weight: .semibold))
+                    .foregroundStyle(.purple)
 
-                // ---- Mood name or prompt ----
-                if let mood = entry.todaysMood {
-                    Text(mood.displayName)
-                        .font(.caption)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(mood.color)
-                } else {
-                    Text("Tap to journal")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                Text("Private journal")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
 
                 Spacer()
 
@@ -297,7 +283,7 @@ struct MindSnapSmallWidgetView: View {
 // MARK: - Medium Widget View
 //
 // Shown when user picks the MEDIUM widget size (4x2 grid).
-// More space — shows mood, entry count, streak, and preview.
+// More space — shows private stats without mood or entry text.
 // ============================================================
 struct MindSnapMediumWidgetView: View {
 
@@ -308,35 +294,25 @@ struct MindSnapMediumWidgetView: View {
             // Background
             ContainerRelativeShape()
                 .fill(
-                    (entry.todaysMood?.color ?? Color.purple)
-                        .opacity(0.12)
-                        .gradient
+                    Color.purple.opacity(0.12).gradient
                 )
 
             HStack(spacing: 16) {
 
-                // ---- Left Side: Big mood display ----
+                // ---- Left Side: Private journal shortcut ----
                 VStack(spacing: 6) {
-                    // Big emoji
-                    Text(entry.todaysMood?.emoji ?? "📓")
-                        .font(.system(size: 50))
+                    Image(systemName: "lock.doc.fill")
+                        .font(.system(size: 42, weight: .semibold))
+                        .foregroundStyle(.purple)
 
-                    // Mood name
-                    if let mood = entry.todaysMood {
-                        Text(mood.displayName)
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundStyle(mood.color)
-                    } else {
-                        Text("No entry")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    Text("Journal")
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.primary)
 
-                    // Today label
-                    Text("Today")
+                    Text("Private")
                         .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                 }
                 .frame(maxHeight: .infinity)
 
@@ -374,19 +350,10 @@ struct MindSnapMediumWidgetView: View {
                             .foregroundStyle(.secondary)
                     }
 
-                    // Last entry preview
-                    if let preview = entry.lastEntryPreview {
-                        Text(preview)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                            .italic()
-                    } else {
-                        Text("Tap to write your first entry")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .italic()
-                    }
+                    Text("Open MindSnap to write or review your private entries.")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
 
                     Spacer()
                 }
@@ -431,7 +398,7 @@ struct MindSnapWidget: Widget {
         // Name shown in the widget picker
         .configurationDisplayName("MindSnap")
         // Description shown in the widget picker
-        .description("See your daily mood and journaling streak.")
+        .description("See private journaling stats and your streak.")
         // Which sizes this widget supports
         .supportedFamilies([.systemSmall, .systemMedium])
     }
@@ -460,8 +427,6 @@ struct MindSnapWidgetEntryView: View {
         case .systemSmall:
             MindSnapSmallWidgetView(entry: entry)
                 .containerBackground(for: .widget) {
-                    // Widget background — uses mood color
-                    // or purple if no mood yet
                     Color.purple.opacity(0.15)
                 }
         case .systemMedium:
@@ -486,10 +451,10 @@ struct MindSnapWidgetEntryView: View {
         MindSnapWidgetEntry.placeholder
         MindSnapWidgetEntry(
             date: Date(),
-            todaysMood: .happy,
+            todaysMood: nil,
             entryCount: 2,
             streakCount: 5,
-            lastEntryPreview: "Today was amazing!"
+            lastEntryPreview: nil
         )
     }
     
@@ -499,10 +464,10 @@ struct MindSnapWidgetEntryView: View {
         MindSnapWidgetEntry.placeholder
         MindSnapWidgetEntry(    
             date: Date(),
-            todaysMood: .calm,
+            todaysMood: nil,
             entryCount: 1,
             streakCount: 12,
-            lastEntryPreview: "Peaceful morning coffee and reading."
+            lastEntryPreview: nil
         )
     }
 }

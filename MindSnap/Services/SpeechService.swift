@@ -96,6 +96,7 @@ final class SpeechService: NSObject {
 
     // AVAudioEngine — captures audio from the microphone
     private let audioEngine = AVAudioEngine()
+    private var inputTapInstalled = false
 
     // --------------------------------------------------------
     // init()
@@ -108,6 +109,12 @@ final class SpeechService: NSObject {
         speechRecognizer = SFSpeechRecognizer(locale: Locale.current)
         speechRecognizer?.delegate = self
         checkAvailability()
+    }
+
+    deinit {
+        cleanupRecognition(cancelTask: true)
+        speechRecognizer?.delegate = nil
+        speechRecognizer = nil
     }
 
     // --------------------------------------------------------
@@ -178,10 +185,7 @@ final class SpeechService: NSObject {
             return
         }
 
-        if recognitionTask != nil {
-            recognitionTask?.cancel()
-            recognitionTask = nil
-        }
+        cleanupRecognition(cancelTask: true, deactivateSession: false)
 
         // ---- Step 3: Set up audio session ----
         // AVAudioSession manages the audio hardware
@@ -242,12 +246,8 @@ final class SpeechService: NSObject {
 
             // Stop if final result or error
             if error != nil || isFinal {
-                self.audioEngine.stop()
-                self.audioEngine.inputNode.removeTap(onBus: 0)
-                self.recognitionRequest = nil
-                self.recognitionTask = nil
                 DispatchQueue.main.async {
-                    self.isRecording = false
+                    self.cleanupRecognition(cancelTask: false)
                 }
             }
         }
@@ -267,6 +267,7 @@ final class SpeechService: NSObject {
             // Feed each audio buffer to the recognizer
             self?.recognitionRequest?.append(buffer)
         }
+        inputTapInstalled = true
 
         // ---- Step 7: Start the audio engine ----
         audioEngine.prepare()
@@ -278,6 +279,7 @@ final class SpeechService: NSObject {
                 errorMessage = nil
             }
         } catch {
+            cleanupRecognition(cancelTask: true)
             await MainActor.run {
                 errorMessage = "Could not start audio engine."
             }
@@ -291,24 +293,11 @@ final class SpeechService: NSObject {
     // Called when user taps the mic button again.
     // --------------------------------------------------------
     func stopRecording() {
-        // Stop the audio engine
-        audioEngine.stop()
-
         // Signal end of audio to the recognizer
         // This triggers the final transcription result
         recognitionRequest?.endAudio()
-
-        // Cancel the recognition task
-        recognitionTask?.cancel()
-        recognitionTask = nil
-
-        // Restore audio session
-        try? AVAudioSession.sharedInstance().setActive(
-            false,
-            options: .notifyOthersOnDeactivation
-        )
-
-        isRecording = false
+        recognitionTask?.finish()
+        cleanupRecognition(cancelTask: false)
     }
 
     // --------------------------------------------------------
@@ -338,6 +327,34 @@ final class SpeechService: NSObject {
         isAvailable =
             (speechRecognizer?.isAvailable ?? false) &&
             (speechRecognizer?.supportsOnDeviceRecognition ?? false)
+    }
+
+    private func cleanupRecognition(
+        cancelTask: Bool,
+        deactivateSession: Bool = true
+    ) {
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        if inputTapInstalled {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            inputTapInstalled = false
+        }
+
+        if cancelTask {
+            recognitionTask?.cancel()
+        }
+        recognitionTask = nil
+        recognitionRequest = nil
+
+        if deactivateSession {
+            try? AVAudioSession.sharedInstance().setActive(
+                false,
+                options: .notifyOthersOnDeactivation
+            )
+        }
+
+        isRecording = false
     }
 }
 

@@ -236,6 +236,8 @@ struct HomeView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
+        .frame(minWidth: 46, minHeight: 28)
+        .padding(.leading, 2)
         .background(
             Capsule()
                 .fill(Color.purple.opacity(

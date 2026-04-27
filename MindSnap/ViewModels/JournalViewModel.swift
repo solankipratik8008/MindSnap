@@ -58,18 +58,24 @@ class JournalViewModel {
         let uniqueDays = Set(entries.map {
             calendar.startOfDay(for: $0.date)
         })
-        let sortedDays = uniqueDays.sorted(by: >)
+        guard !uniqueDays.isEmpty else { return 0 }
+
+        let yesterday = calendar.date(
+            byAdding: .day,
+            value: -1,
+            to: today
+        ) ?? today
+        var currentDay = uniqueDays.contains(today) ? today : yesterday
+        guard uniqueDays.contains(currentDay) else { return 0 }
+
         var streak = 0
-        var currentDay = today
-        for day in sortedDays {
-            if day == currentDay {
-                streak += 1
-                currentDay = calendar.date(
-                    byAdding: .day, value: -1, to: currentDay
-                ) ?? currentDay
-            } else if day < currentDay {
-                break
-            }
+        while uniqueDays.contains(currentDay) {
+            streak += 1
+            currentDay = calendar.date(
+                byAdding: .day,
+                value: -1,
+                to: currentDay
+            ) ?? currentDay
         }
         return streak
     }

@@ -274,6 +274,7 @@ struct EntryEditorView: View {
     @State private var selectedPrompt: String? = nil
     @State private var showingPrompts = false
     @State private var showingTagSelector = false
+    @State private var isFocusMode = false
     @State private var userSelectedMood: MoodType = .neutral
     @State private var aiDetectedMood: MoodType = .neutral
     @State private var userHasOverridden = false
@@ -281,6 +282,7 @@ struct EntryEditorView: View {
 
     @State private var speechService = SpeechService()
     @State private var showingSpeechError = false
+    @State private var lastSpeechTranscript = ""
 
     private let sentimentService = SentimentService()
     private var isEditMode: Bool { existingEntry != nil }
@@ -346,23 +348,21 @@ struct EntryEditorView: View {
                                 .padding(.horizontal, 16)
                         }
 
-                        // ---- Prompts ----
-                        reflectionPromptsSection
-                            .padding(.horizontal, 16)
+                        if !isFocusMode {
+                            reflectionPromptsSection
+                                .padding(.horizontal, 16)
 
-                        // ---- Tags ----
-                        tagAndEmojiSection
-                            .padding(.horizontal, 16)
+                            tagAndEmojiSection
+                                .padding(.horizontal, 16)
 
-                        // ---- Selected Tags ----
-                        if !selectedTags.isEmpty {
-                            selectedTagsDisplay
+                            if !selectedTags.isEmpty {
+                                selectedTagsDisplay
+                                    .padding(.horizontal, 16)
+                            }
+
+                            moodOverrideBar
                                 .padding(.horizontal, 16)
                         }
-
-                        // ---- Mood Override ----
-                        moodOverrideBar
-                            .padding(.horizontal, 16)
 
                         Spacer(minLength: 40)
                     }
@@ -384,6 +384,27 @@ struct EntryEditorView: View {
                         dismiss()
                     }
                     .foregroundStyle(.secondary)
+                }
+
+                ToolbarItem(
+                    placement: .navigationBarTrailing
+                ) {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isFocusMode.toggle()
+                            if isFocusMode {
+                                showingPrompts = false
+                                showingTagSelector = false
+                            }
+                        }
+                    } label: {
+                        Image(
+                            systemName: isFocusMode
+                                ? "arrow.down.right.and.arrow.up.left"
+                                : "arrow.up.left.and.arrow.down.right"
+                        )
+                    }
+                    .foregroundStyle(.purple)
                 }
 
                 ToolbarItem(
@@ -454,10 +475,13 @@ struct EntryEditorView: View {
             }
         }
         .onChange(of: speechService.transcribedText) { _, text in
-            if !text.isEmpty { appendToRichText(text) }
+            appendSpeechDelta(text)
         }
         .onChange(of: speechService.errorMessage) { _, err in
             if err != nil { showingSpeechError = true }
+        }
+        .onDisappear {
+            speechService.stopRecording()
         }
     }
 
@@ -484,7 +508,7 @@ struct EntryEditorView: View {
                 .buttonStyle(.plain)
 
                 Button {
-                    Task { await speechService.toggleRecording() }
+                    toggleSpeechRecording()
                 } label: {
                     Image(systemName:
                         speechService.isRecording
@@ -511,7 +535,7 @@ struct EntryEditorView: View {
                     handleFormattingAction(action)
                 }
             )
-            .frame(minHeight: 220)
+            .frame(minHeight: isFocusMode ? 520 : 220)
             .padding(4)
             .background(
                 RoundedRectangle(cornerRadius: 14)
@@ -550,10 +574,17 @@ struct EntryEditorView: View {
         case .table:         insertTable()
         case .image:         showingImagePicker = true
         case .voice:
-            Task { await speechService.toggleRecording() }
+            toggleSpeechRecording()
         case .dismiss:
             dismissKeyboard()
         }
+    }
+
+    private func toggleSpeechRecording() {
+        if !speechService.isRecording {
+            lastSpeechTranscript = ""
+        }
+        Task { await speechService.toggleRecording() }
     }
 
     private func dismissKeyboard() {
@@ -1223,6 +1254,24 @@ struct EntryEditorView: View {
         ))
         attributedText = mutable
         plainText = mutable.string
+    }
+
+    private func appendSpeechDelta(_ text: String) {
+        guard !text.isEmpty else {
+            lastSpeechTranscript = ""
+            return
+        }
+
+        let addition: String
+        if text.hasPrefix(lastSpeechTranscript) {
+            addition = String(text.dropFirst(lastSpeechTranscript.count))
+        } else {
+            addition = text
+        }
+
+        lastSpeechTranscript = text
+        guard !addition.isEmpty else { return }
+        appendToRichText(addition)
     }
 
     private func appendAttributedText(
