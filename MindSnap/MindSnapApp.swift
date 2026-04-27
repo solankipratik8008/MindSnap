@@ -91,10 +91,6 @@ struct MindSnapApp: App {
     @AppStorage("hasCompletedOnboarding")
     private var hasCompletedOnboarding = false
 
-    #if DEBUG
-    @State private var showingReviewLinkReminder = false
-    #endif
-
     // --------------------------------------------------------
     // sharedModelContainer
     //
@@ -226,21 +222,6 @@ struct MindSnapApp: App {
                 }
             }
             .preferredColorScheme(preferredScheme)
-            #if DEBUG
-            .onAppear {
-                showingReviewLinkReminder = true
-            }
-            .alert(
-                "Replace App Store Review Link",
-                isPresented: $showingReviewLinkReminder
-            ) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(
-                    "Before release, replace YOUR_APP_ID in ReviewService.appStoreReviewURL after App Store Connect creates the app record."
-                )
-            }
-            #endif
         }
         .modelContainer(sharedModelContainer)
         .onChange(of: hasCompletedOnboarding) { _, completed in

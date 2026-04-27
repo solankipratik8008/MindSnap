@@ -20,6 +20,7 @@
 
 import SwiftUI
 import SwiftData
+import UIKit
 
 struct GoalRowView: View {
 
@@ -876,17 +877,7 @@ struct GoalRowView: View {
                 Spacer()
 
                 Button {
-                    isManualEditFocused = false
-                    updateManualEditValue(from: manualEditText)
-                    showingManualEditSheet = false
-                    DispatchQueue.main.asyncAfter(
-                        deadline: .now() + 0.3
-                    ) {
-                        viewModel.requestManualOverride(
-                            goal: goal,
-                            newValue: manualEditValue
-                        )
-                    }
+                    saveManualProgress()
                 } label: {
                     Text("Save My Progress")
                         .font(.headline)
@@ -917,6 +908,18 @@ struct GoalRowView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(
+                    placement: .navigationBarLeading
+                ) {
+                    Button("Save") {
+                        saveManualProgress()
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(
+                        isManualEditValid ? goal.color : .secondary
+                    )
+                    .disabled(!isManualEditValid)
+                }
+                ToolbarItem(
                     placement: .navigationBarTrailing
                 ) {
                     Button("Cancel") {
@@ -927,7 +930,7 @@ struct GoalRowView: View {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("Done") {
-                        isManualEditFocused = false
+                        saveManualProgress()
                     }
                 }
             }
@@ -1212,6 +1215,29 @@ struct GoalRowView: View {
             return false
         }
         return value <= Double(max(goal.targetValue * 2, goal.targetValue, 1))
+    }
+
+    private func saveManualProgress() {
+        guard isManualEditValid else { return }
+        dismissKeyboard()
+        isManualEditFocused = false
+        updateManualEditValue(from: manualEditText)
+        showingManualEditSheet = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            viewModel.requestManualOverride(
+                goal: goal,
+                newValue: manualEditValue
+            )
+        }
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
     }
 
     private func updateManualEditValue(from text: String) {
