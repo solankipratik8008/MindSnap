@@ -463,6 +463,8 @@ class GoalViewModel {
         // ---- SAVE IMMEDIATELY ----
         saveContext()
 
+        ReviewService.shared.trackGoalCreated()
+
         // ---- Award points ----
         let pts = goals.isEmpty ? 20 : 5
         awardPoints(pts)

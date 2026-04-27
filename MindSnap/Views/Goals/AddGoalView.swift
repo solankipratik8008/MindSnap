@@ -28,6 +28,7 @@ struct AddGoalView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("isHealthSyncEnabled") private var isHealthSyncEnabled = false
 
     // ---- Basic info ----
     @State private var goalName = ""
@@ -61,8 +62,13 @@ struct AddGoalView: View {
     @State private var showingHealthWarning = false
     @State private var showingDuplicateError = false
     @State private var showingPermissionDenied = false
+    @State private var showingHealthManualNotice = false
 
     private var isEditMode: Bool { existingGoal != nil }
+    private var shouldRequestHealthAccess: Bool {
+        selectedType == .progress &&
+        HealthKitService.healthSupportedActivityTypes.contains(selectedActivityType)
+    }
 
     private let dayLabels = ["Mo","Tu","We","Th","Fr","Sa","Su"]
 
@@ -158,7 +164,7 @@ struct AddGoalView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(isEditMode ? "Update" : "Add Goal") {
-                        saveGoal()
+                        Task { await saveGoal() }
                     }
                     .fontWeight(.semibold)
                     .foregroundStyle(
@@ -179,6 +185,11 @@ struct AddGoalView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("Enable notifications for MindSnap in iOS Settings to receive goal reminders.")
+            }
+            .alert("Manual Progress Still Works", isPresented: $showingHealthManualNotice) {
+                Button("OK") { dismiss() }
+            } message: {
+                Text("Health access was not enabled. MindSnap saved your goal, and you can still update this goal manually.")
             }
         }
         .onAppear {
@@ -1249,24 +1260,7 @@ struct AddGoalView: View {
                 .padding(.horizontal)
 
                 Button {
-                    let calendar = Calendar.current
-                    let hour = calendar.component(.hour, from: newReminderTime)
-                    let minute = calendar.component(.minute, from: newReminderTime)
-                    let newReminder = ReminderTime(hour: hour, minute: minute)
-
-                    let isDuplicate = reminders.contains {
-                        $0.hour == hour && $0.minute == minute
-                    }
-
-                    if !isDuplicate {
-                        withAnimation(.spring(duration: 0.3)) {
-                            reminders.append(newReminder)
-                            reminders.sort { ($0.hour * 60 + $0.minute) < ($1.hour * 60 + $1.minute) }
-                        }
-                        UINotificationFeedbackGenerator().notificationOccurred(.success)
-                    }
-
-                    showingTimePicker = false
+                    addReminderFromPicker()
                 } label: {
                     Text("Add Reminder")
                         .font(.headline)
@@ -1292,12 +1286,19 @@ struct AddGoalView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Add Reminder") {
+                        addReminderFromPicker()
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundStyle(selectedCategory.color)
+                }
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") { showingTimePicker = false }
                         .foregroundStyle(.secondary)
                 }
             }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.height(440), .large])
         .presentationDragIndicator(.visible)
     }
 
@@ -1375,6 +1376,31 @@ struct AddGoalView: View {
         }
     }
 
+    private func addReminderFromPicker() {
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: newReminderTime)
+        let minute = calendar.component(.minute, from: newReminderTime)
+        let newReminder = ReminderTime(hour: hour, minute: minute)
+
+        let isDuplicate = reminders.contains {
+            $0.hour == hour && $0.minute == minute
+        }
+
+        if !isDuplicate {
+            withAnimation(.spring(duration: 0.3)) {
+                reminders.append(newReminder)
+                reminders.sort {
+                    ($0.hour * 60 + $0.minute) <
+                    ($1.hour * 60 + $1.minute)
+                }
+            }
+            UINotificationFeedbackGenerator()
+                .notificationOccurred(.success)
+        }
+
+        showingTimePicker = false
+    }
+
     private func applyPreset(_ preset: PresetGoal) {
         withAnimation(.spring(duration: 0.3)) {
             goalName = preset.name
@@ -1421,7 +1447,7 @@ struct AddGoalView: View {
     // --------------------------------------------------------
     // MARK: - Save Goal
     // --------------------------------------------------------
-    private func saveGoal() {
+    private func saveGoal() async {
         // Duplicate check (new goals only)
         if !isEditMode && viewModel.isDuplicateGoal(name: goalName) {
             withAnimation(.spring(duration: 0.3)) { showingDuplicateError = true }
@@ -1430,6 +1456,15 @@ struct AddGoalView: View {
             }
             UINotificationFeedbackGenerator().notificationOccurred(.error)
             return
+        }
+
+        var shouldShowManualHealthNotice = false
+        if shouldRequestHealthAccess {
+            let granted = await viewModel.requestHealthKitAccess()
+            if granted {
+                isHealthSyncEnabled = true
+            }
+            shouldShowManualHealthNotice = !granted
         }
 
         if let existing = existingGoal {
@@ -1467,7 +1502,11 @@ struct AddGoalView: View {
                 reminders: reminders
             )
         }
-        dismiss()
+        if shouldShowManualHealthNotice {
+            showingHealthManualNotice = true
+        } else {
+            dismiss()
+        }
     }
 
     // --------------------------------------------------------

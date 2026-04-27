@@ -48,9 +48,14 @@ final class ReviewService {
     // UserDefaults keys
     // --------------------------------------------------------
     private let entriesCountKey = "reviewEntriesCount"
+    private let goalsCountKey = "reviewGoalsCreatedCount"
     private let firstLaunchKey = "reviewFirstLaunchDate"
     private let hasRequestedKey = "reviewHasRequested"
     private let lastRequestKey = "reviewLastRequestDate"
+
+    // Replace YOUR_APP_ID after the app is live on the App Store.
+    static let appStoreReviewURL =
+        "https://apps.apple.com/app/idYOUR_APP_ID?action=write-review"
 
     // --------------------------------------------------------
     // trackEntryCreated()
@@ -104,6 +109,21 @@ final class ReviewService {
         }
     }
 
+    func trackGoalCreated() {
+        let count = UserDefaults.standard.integer(
+            forKey: goalsCountKey
+        ) + 1
+        UserDefaults.standard.set(count, forKey: goalsCountKey)
+
+        if UserDefaults.standard.object(forKey: firstLaunchKey) == nil {
+            UserDefaults.standard.set(Date(), forKey: firstLaunchKey)
+        }
+
+        if count == 5 {
+            requestReview()
+        }
+    }
+
     // --------------------------------------------------------
     // requestReview()
     //
@@ -120,6 +140,10 @@ final class ReviewService {
     // --------------------------------------------------------
     // ✅ REPLACE WITH — uses new iOS 18 API
     func requestReview() {
+        guard !UserDefaults.standard.bool(forKey: hasRequestedKey) else {
+            return
+        }
+
         // Check 30 day cooldown
         if let lastRequest = UserDefaults.standard.object(
             forKey: lastRequestKey
@@ -150,6 +174,10 @@ final class ReviewService {
             UserDefaults.standard.set(
                 Date(),
                 forKey: self.lastRequestKey
+            )
+            UserDefaults.standard.set(
+                true,
+                forKey: self.hasRequestedKey
             )
         }
     }

@@ -687,8 +687,11 @@ struct GoalRowView: View {
                         width: max(
                             7,
                             geo.size.width *
-                            CGFloat(todaysProgress) /
-                            CGFloat(max(1, goal.targetValue))
+                            min(
+                                1,
+                                CGFloat(todaysProgress) /
+                                CGFloat(max(1, goal.targetValue))
+                            )
                         ),
                         height: 7
                     )
@@ -742,7 +745,7 @@ struct GoalRowView: View {
     private var manualEditButton: some View {
         Button {
             manualEditValue = todaysProgress
-            manualEditText = formattedProgress(todaysProgress)
+            manualEditText = rawProgressInput(todaysProgress)
             showingManualEditSheet = true
         } label: {
             HStack(spacing: 5) {
@@ -931,6 +934,13 @@ struct GoalRowView: View {
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
+        .onAppear {
+            manualEditValue = todaysProgress
+            manualEditText = rawProgressInput(todaysProgress)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                isManualEditFocused = true
+            }
+        }
     }
 
     // --------------------------------------------------------
@@ -1197,7 +1207,8 @@ struct GoalRowView: View {
     }
 
     private var isManualEditValid: Bool {
-        guard let value = Double(manualEditText), value >= 0 else {
+        let sanitized = sanitizedManualInput(manualEditText)
+        guard let value = Double(sanitized), value >= 0 else {
             return false
         }
         return value <= Double(max(goal.targetValue * 2, goal.targetValue, 1))
@@ -1253,6 +1264,17 @@ struct GoalRowView: View {
             return value.formatted(.number.precision(.fractionLength(0...1)))
         }
         return Int(value.rounded(.down)).formatted(.number)
+    }
+
+    private func rawProgressInput(_ value: Double) -> String {
+        if allowsDecimalProgress {
+            return value.formatted(
+                .number
+                    .precision(.fractionLength(0...1))
+                    .grouping(.never)
+            )
+        }
+        return String(Int(value.rounded(.down)))
     }
 
     private func startExpiryPulse() {

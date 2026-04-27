@@ -196,7 +196,8 @@ class JournalViewModel {
         text: String,
         richTextData: Data? = nil,
         tags: [String] = [],
-        reflectionPrompt: String? = nil
+        reflectionPrompt: String? = nil,
+        moodType: MoodType? = nil
     ) {
         let trimmed = text.trimmingCharacters(
             in: .whitespacesAndNewlines
@@ -207,11 +208,12 @@ class JournalViewModel {
         }
 
         let result = sentimentService.analyze(text: trimmed)
+        let finalMood = moodType ?? result.mood
 
         let newEntry = JournalEntry(
             text: trimmed,
             richTextData: richTextData,
-            moodType: result.mood,
+            moodType: finalMood,
             sentimentScore: result.score,
             tags: tags,
             reflectionPromptUsed: reflectionPrompt
@@ -235,7 +237,8 @@ class JournalViewModel {
         text: String,
         richTextData: Data? = nil,
         tags: [String] = [],
-        reflectionPrompt: String? = nil
+        reflectionPrompt: String? = nil,
+        moodType: MoodType? = nil
     ) {
         let trimmed = text.trimmingCharacters(
             in: .whitespacesAndNewlines
@@ -246,10 +249,11 @@ class JournalViewModel {
         }
 
         let result = sentimentService.analyze(text: trimmed)
+        let finalMood = moodType ?? result.mood
 
         entry.text = trimmed
         entry.richTextData = richTextData
-        entry.moodType = result.mood
+        entry.moodType = finalMood
         entry.sentimentScore = result.score
         entry.tags = tags
         entry.reflectionPromptUsed = reflectionPrompt

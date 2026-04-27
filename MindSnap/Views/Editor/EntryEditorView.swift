@@ -1329,14 +1329,16 @@ struct EntryEditorView: View {
                 text: text,
                 richTextData: richTextData,
                 tags: selectedTags,
-                reflectionPrompt: selectedPrompt
+                reflectionPrompt: selectedPrompt,
+                moodType: finalMood
             )
         } else {
             viewModel.saveEntry(
                 text: text,
                 richTextData: richTextData,
                 tags: selectedTags,
-                reflectionPrompt: selectedPrompt
+                reflectionPrompt: selectedPrompt,
+                moodType: finalMood
             )
         }
         dismiss()

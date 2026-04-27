@@ -15,6 +15,17 @@ final class HealthKitService {
 
     private let store = HKHealthStore()
 
+    static let healthSupportedActivityTypes: Set<GoalActivityType> = [
+        .walking,
+        .running,
+        .cycling,
+        .swimming,
+        .gym,
+        .yoga,
+        .meditation,
+        .water
+    ]
+
     var isAvailable: Bool {
         HKHealthStore.isHealthDataAvailable()
     }
