@@ -56,7 +56,7 @@ struct OnboardingView: View {
                 systemImage: "lock.shield.fill",
                 imageColor: .green,
                 title: "100% Private",
-                subtitle: "Your journal never leaves your device.\nNo accounts. No cloud. No ads.\nJust you and your thoughts.",
+                subtitle: "Your journal never leaves your device.\nNo accounts. No ads.\nJust you and your thoughts.",
                 backgroundGradient: [.green, .green]
             ),
             OnboardingPage(
