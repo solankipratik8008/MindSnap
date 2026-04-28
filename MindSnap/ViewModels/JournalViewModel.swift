@@ -11,6 +11,7 @@
 import SwiftData
 import SwiftUI
 import Foundation
+import WidgetKit
 
 @Observable
 class JournalViewModel {
@@ -361,6 +362,7 @@ class JournalViewModel {
     private func saveContext() {
         do {
             try modelContext.save()
+            WidgetCenter.shared.reloadAllTimelines()
         } catch {
             errorMessage = "Failed to save: \(error.localizedDescription)"
         }

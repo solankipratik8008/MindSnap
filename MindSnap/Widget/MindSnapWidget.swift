@@ -151,6 +151,14 @@ struct MindSnapWidgetProvider: @MainActor TimelineProvider {
                 sortBy: [SortDescriptor(\.date, order: .reverse)]
             )
             let entries = try context.fetch(descriptor)
+            let goals = try context.fetch(FetchDescriptor<Goal>())
+            let completions = try context.fetch(
+                FetchDescriptor<GoalCompletion>(
+                    sortBy: [
+                        SortDescriptor(\.completedAt, order: .reverse)
+                    ]
+                )
+            )
 
             // ---- Calculate today's data ----
             let calendar = Calendar.current
@@ -167,12 +175,33 @@ struct MindSnapWidgetProvider: @MainActor TimelineProvider {
                 calendar: calendar
             )
 
+            let goalSummary = todaysGoalSummary(
+                goals: goals,
+                completions: completions,
+                today: today,
+                calendar: calendar
+            )
+            let widgetGoals = widgetGoalSnapshots(
+                goals: goals,
+                completions: completions,
+                today: today,
+                calendar: calendar
+            )
+            let primaryGoal = widgetGoals.first
+
             return MindSnapWidgetEntry(
                 date: Date(),
                 todaysMood: nil,
                 entryCount: todaysEntries.count,
                 streakCount: streakCount,
-                lastEntryPreview: nil
+                lastEntryPreview: nil,
+                goalName: primaryGoal?.name ?? goalSummary.name,
+                goalProgress: primaryGoal?.progress ?? goalSummary.progress,
+                goalTarget: primaryGoal?.target ?? goalSummary.target,
+                goalUnit: primaryGoal?.unit ?? goalSummary.unit,
+                completedGoalsToday: goalSummary.completedCount,
+                totalGoalsToday: goalSummary.totalCount,
+                widgetGoals: widgetGoals
             )
 
         } catch {
@@ -180,6 +209,140 @@ struct MindSnapWidgetProvider: @MainActor TimelineProvider {
             // getTimeline will use placeholder instead
             print("Widget data load failed: \(error)")
             return nil
+        }
+    }
+
+    private func todaysGoalSummary(
+        goals: [Goal],
+        completions: [GoalCompletion],
+        today: Date,
+        calendar: Calendar
+    ) -> (
+        name: String?,
+        progress: Double,
+        target: Int,
+        unit: String,
+        completedCount: Int,
+        totalCount: Int
+    ) {
+        let todaysGoals = goals.filter {
+            $0.isActive && $0.isScheduledForToday
+        }
+        let todaysCompletions = completions.filter {
+            calendar.startOfDay(for: $0.completedAt) == today
+        }
+
+        let completedCount = todaysGoals.filter { goal in
+            if let completion = todaysCompletions.first(where: {
+                $0.goalID == goal.id
+            }) {
+                return completion.isCompleted ||
+                    completion.progressValue >= Double(goal.targetValue)
+            }
+            return goal.currentProgressValue >= Double(goal.targetValue)
+        }.count
+
+        let progressGoals = todaysGoals.filter {
+            $0.goalType == .progress
+        }
+        let selectedGoal = progressGoals.max { left, right in
+            progressValue(
+                for: left,
+                completions: todaysCompletions
+            ) < progressValue(
+                for: right,
+                completions: todaysCompletions
+            )
+        } ?? todaysGoals.first
+
+        guard let selectedGoal else {
+            return (nil, 0, 0, "", completedCount, todaysGoals.count)
+        }
+
+        return (
+            selectedGoal.name,
+            progressValue(
+                for: selectedGoal,
+                completions: todaysCompletions
+            ),
+            selectedGoal.targetValue,
+            selectedGoal.unit,
+            completedCount,
+            todaysGoals.count
+        )
+    }
+
+    private func progressValue(
+        for goal: Goal,
+        completions: [GoalCompletion]
+    ) -> Double {
+        if let completion = completions.first(where: {
+            $0.goalID == goal.id
+        }) {
+            return completion.progressValue
+        }
+        return goal.currentProgressValue
+    }
+
+    private func widgetGoalSnapshots(
+        goals: [Goal],
+        completions: [GoalCompletion],
+        today: Date,
+        calendar: Calendar
+    ) -> [WidgetGoalSnapshot] {
+        let todaysGoals = goals.filter {
+            $0.isActive && $0.isScheduledForToday
+        }
+        let todaysCompletions = completions.filter {
+            calendar.startOfDay(for: $0.completedAt) == today
+        }
+        let selectedIDs = selectedWidgetGoalIDs()
+        let selectedGoals = selectedIDs.compactMap { id in
+            todaysGoals.first { $0.id == id }
+        }
+        let fallbackGoals = todaysGoals.filter { goal in
+            !selectedIDs.contains(goal.id)
+        }
+        let orderedGoals = selectedGoals.isEmpty
+            ? Array(todaysGoals.prefix(4))
+            : Array((selectedGoals + fallbackGoals).prefix(4))
+
+        return orderedGoals.map { goal in
+            let completion = todaysCompletions.first {
+                $0.goalID == goal.id
+            }
+            return WidgetGoalSnapshot(
+                id: goal.id,
+                name: goal.name,
+                emoji: goal.emoji,
+                progress: completion?.progressValue ??
+                    goal.currentProgressValue,
+                target: goal.targetValue,
+                unit: goal.unit,
+                calories: shouldShowCalories(for: goal)
+                    ? completion?.latestHealthCalories ?? 0
+                    : 0
+            )
+        }
+    }
+
+    private func selectedWidgetGoalIDs() -> [UUID] {
+        let raw = UserDefaults(suiteName: "group.com.pratik.MindSnap")?
+            .string(forKey: "widgetGoalIDs") ?? ""
+        return raw
+            .split(separator: ",")
+            .compactMap { UUID(uuidString: String($0)) }
+    }
+
+    private func shouldShowCalories(for goal: Goal) -> Bool {
+        switch goal.activityType {
+        case .walking, .running, .cycling, .swimming, .gym, .yoga:
+            return true
+        default:
+            let unit = goal.unit.lowercased()
+            return unit == "cal" || unit == "cals" ||
+                unit == "calorie" || unit == "calories" ||
+                unit == "kcal"
         }
     }
 
@@ -236,46 +399,76 @@ struct MindSnapSmallWidgetView: View {
 
     var body: some View {
         ZStack {
-            // ---- Background ----
             ContainerRelativeShape()
                 .fill(
-                    Color.purple.opacity(0.15).gradient
+                    LinearGradient(
+                        colors: [
+                            Color.purple.opacity(0.10),
+                            Color(.systemBackground).opacity(0.92)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
                 )
 
-            VStack(spacing: 8) {
+            VStack(spacing: 7) {
+                HStack {
+                    Text("MindSnap")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer()
+                    Text("🔥 \(entry.streakCount)")
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                }
+                .frame(height: 14)
 
-                // ---- Top: App name ----
-                Text("MindSnap")
-                    .font(.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                ZStack {
+                    Circle()
+                        .fill(Color(.systemBackground).opacity(0.90))
+                        .frame(width: 44, height: 44)
+                    if let goal = entry.widgetGoals.first {
+                        Text(goal.emoji)
+                            .font(.system(size: 20))
+                    } else {
+                        Image(systemName: "book.closed.fill")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundStyle(.purple)
+                    }
+                }
 
-                Spacer()
-
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 38, weight: .semibold))
-                    .foregroundStyle(.purple)
-
-                Text("Private journal")
+                Text(entry.widgetGoals.first?.name ?? "Journal")
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
 
-                Spacer()
-
-                // ---- Bottom: Streak counter ----
-                HStack(spacing: 3) {
-                    Text("🔥")
-                        .font(.caption2)
-                    Text("\(entry.streakCount) day streak")
-                        .font(.caption2)
+                HStack(spacing: 4) {
+                    Image(systemName: "target")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text(
+                        entry.widgetGoals.first.map {
+                            "\(Int($0.progressRatio * 100))%"
+                        } ??
+                        (entry.goalTarget > 0
+                            ? "\(Int(entry.goalProgressRatio * 100))%"
+                            : "\(entry.completedGoalsToday) goals"
+                        )
+                    )
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: 12)
             }
-            .padding(14)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
         }
+        .widgetURL(URL(string: "mindsnap://journal"))
     }
 }
 
@@ -283,7 +476,7 @@ struct MindSnapSmallWidgetView: View {
 // MARK: - Medium Widget View
 //
 // Shown when user picks the MEDIUM widget size (4x2 grid).
-// More space — shows private stats without mood or entry text.
+// More space — shows private goal progress plus journal stats.
 // ============================================================
 struct MindSnapMediumWidgetView: View {
 
@@ -291,69 +484,85 @@ struct MindSnapMediumWidgetView: View {
 
     var body: some View {
         ZStack {
-            // Background
             ContainerRelativeShape()
                 .fill(
-                    Color.purple.opacity(0.12).gradient
+                    LinearGradient(
+                        colors: [
+                            Color.purple.opacity(0.14),
+                            Color.blue.opacity(0.08)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
                 )
 
-            HStack(spacing: 16) {
+            HStack(spacing: 14) {
+                VStack(spacing: 8) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 18)
+                            .fill(Color.white.opacity(0.82))
+                            .frame(width: 64, height: 64)
+                        Image(systemName: "target")
+                            .font(.system(size: 24, weight: .bold))
+                            .foregroundStyle(.purple)
+                    }
 
-                // ---- Left Side: Private journal shortcut ----
-                VStack(spacing: 6) {
-                    Image(systemName: "lock.doc.fill")
-                        .font(.system(size: 42, weight: .semibold))
-                        .foregroundStyle(.purple)
-
-                    Text("Journal")
+                    Text("\(Int(entry.goalProgressRatio * 100))%")
                         .font(.caption)
                         .fontWeight(.bold)
                         .foregroundStyle(.primary)
 
-                    Text("Private")
+                    Text("Goals")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxHeight: .infinity)
 
-                // Vertical divider
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.2))
-                    .frame(width: 1)
-                    .padding(.vertical, 8)
-
-                // ---- Right Side: Stats + Preview ----
-                VStack(alignment: .leading, spacing: 8) {
-
-                    // App name
-                    Text("MindSnap")
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("Goals")
                         .font(.caption2)
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
 
-                    // Entry count today
-                    HStack(spacing: 4) {
-                        Image(systemName: "square.and.pencil")
-                            .font(.caption2)
-                            .foregroundStyle(.purple)
-                        Text("\(entry.entryCount) \(entry.entryCount == 1 ? "entry" : "entries") today")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                    Text(entry.widgetGoals.first?.name ?? entry.goalName ?? "Today")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .lineLimit(1)
+
+                    if !entry.widgetGoals.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(entry.widgetGoals.prefix(2), id: \.id) { goal in
+                                HStack(spacing: 6) {
+                                    Text(goal.emoji)
+                                    Text(goal.name)
+                                        .lineLimit(1)
+                                    Spacer(minLength: 4)
+                                    Text("\(Int(goal.progressRatio * 100))%")
+                                        .monospacedDigit()
+                                    if goal.calories > 0 {
+                                        Text("🔥 \(Int(goal.calories))")
+                                            .foregroundStyle(.orange)
+                                    }
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.primary)
+                            }
+                        }
+                    } else {
+                        Text(entry.goalTarget > 0 && !entry.goalUnit.isEmpty
+                             ? "\(entry.formattedGoalProgress) / \(entry.formattedGoalTarget) \(entry.goalUnit)"
+                             : "\(entry.completedGoalsToday)/\(max(entry.totalGoalsToday, 1)) complete")
+                            .font(.caption)
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
                     }
 
-                    // Streak
-                    HStack(spacing: 4) {
-                        Text("🔥")
-                            .font(.caption2)
-                        Text("\(entry.streakCount) day streak")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
+                    ProgressView(value: entry.goalProgressRatio)
+                        .tint(.purple)
 
-                    Text("Open MindSnap to write or review your private entries.")
+                    Text("🔥 \(entry.streakCount) streak")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
 
                     Spacer()
                 }
@@ -361,6 +570,71 @@ struct MindSnapMediumWidgetView: View {
             }
             .padding(14)
         }
+        .widgetURL(URL(string: "mindsnap://goals"))
+    }
+}
+
+// ============================================================
+// MARK: - Lock Screen Widgets
+// ============================================================
+struct MindSnapAccessoryCircularView: View {
+    let entry: MindSnapWidgetEntry
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color.primary.opacity(0.18), lineWidth: 6)
+            Circle()
+                .trim(from: 0, to: max(0.08, min(entry.goalProgressRatio, 1)))
+                .stroke(
+                    Color.purple,
+                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                )
+                .rotationEffect(.degrees(-90))
+            VStack(spacing: 1) {
+                Image(systemName: "target")
+                    .font(.caption)
+                Text("\(Int(entry.goalProgressRatio * 100))")
+                    .font(.system(size: 10, weight: .bold))
+            }
+        }
+        .padding(2)
+        .widgetURL(URL(string: "mindsnap://goals"))
+    }
+}
+
+struct MindSnapAccessoryRectangularView: View {
+    let entry: MindSnapWidgetEntry
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "target")
+                .font(.caption)
+                .foregroundStyle(.purple)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Goals")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                Text(
+                    entry.goalTarget > 0
+                        ? "\(Int(entry.goalProgressRatio * 100))% complete"
+                        : "🔥 \(entry.streakCount)"
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .widgetURL(URL(string: "mindsnap://goals"))
+    }
+}
+
+struct MindSnapAccessoryInlineView: View {
+    let entry: MindSnapWidgetEntry
+
+    var body: some View {
+        Text(entry.goalTarget > 0 ? "Goals \(Int(entry.goalProgressRatio * 100))%" : "🔥 \(entry.streakCount)")
+            .widgetURL(URL(string: "mindsnap://goals"))
     }
 }
 
@@ -388,19 +662,18 @@ struct MindSnapWidget: Widget {
             kind: kind,
             provider: MindSnapWidgetProvider()
         ) { entry in
-            // Return the right view based on widget family
             MindSnapWidgetEntryView(entry: entry)
-                // Give the widget access to SwiftData
-                .modelContainer(
-                    try! ModelContainer(for: JournalEntry.self)
-                )
         }
-        // Name shown in the widget picker
-        .configurationDisplayName("MindSnap")
-        // Description shown in the widget picker
-        .description("See private journaling stats and your streak.")
-        // Which sizes this widget supports
-        .supportedFamilies([.systemSmall, .systemMedium])
+        .configurationDisplayName("MindSnap Journal & Goals")
+        .description("Quick journal and goal progress.")
+        .supportedFamilies([
+            .systemSmall,
+            .systemMedium,
+            .accessoryCircular,
+            .accessoryRectangular,
+            .accessoryInline
+        ])
+        .contentMarginsDisabled()
     }
 }
 
@@ -427,17 +700,32 @@ struct MindSnapWidgetEntryView: View {
         case .systemSmall:
             MindSnapSmallWidgetView(entry: entry)
                 .containerBackground(for: .widget) {
-                    Color.purple.opacity(0.15)
+                    Color(.systemBackground)
                 }
         case .systemMedium:
             MindSnapMediumWidgetView(entry: entry)
                 .containerBackground(for: .widget) {
-                    Color.purple.opacity(0.15)
+                    Color(.systemBackground)
+                }
+        case .accessoryCircular:
+            MindSnapAccessoryCircularView(entry: entry)
+                .containerBackground(for: .widget) {
+                    Color.clear
+                }
+        case .accessoryRectangular:
+            MindSnapAccessoryRectangularView(entry: entry)
+                .containerBackground(for: .widget) {
+                    Color.clear
+                }
+        case .accessoryInline:
+            MindSnapAccessoryInlineView(entry: entry)
+                .containerBackground(for: .widget) {
+                    Color.clear
                 }
         default:
             MindSnapSmallWidgetView(entry: entry)
                 .containerBackground(for: .widget) {
-                    Color.purple.opacity(0.15)
+                    Color(.systemBackground)
                 }
         }
     }
@@ -454,7 +742,16 @@ struct MindSnapWidgetEntryView: View {
             todaysMood: nil,
             entryCount: 2,
             streakCount: 5,
-            lastEntryPreview: nil
+            lastEntryPreview: nil,
+            goalName: "Walk",
+            goalProgress: 4200,
+            goalTarget: 10000,
+            goalUnit: "steps",
+            completedGoalsToday: 1,
+            totalGoalsToday: 4,
+            widgetGoals: [
+                WidgetGoalSnapshot(id: UUID(), name: "Walk", emoji: "🚶", progress: 4200, target: 10000, unit: "steps", calories: 120)
+            ]
         )
     }
     
@@ -467,7 +764,80 @@ struct MindSnapWidgetEntryView: View {
             todaysMood: nil,
             entryCount: 1,
             streakCount: 12,
-            lastEntryPreview: nil
+            lastEntryPreview: nil,
+            goalName: "Morning Run",
+            goalProgress: 3.2,
+            goalTarget: 5,
+            goalUnit: "km",
+            completedGoalsToday: 2,
+            totalGoalsToday: 5,
+            widgetGoals: [
+                WidgetGoalSnapshot(id: UUID(), name: "Run", emoji: "🏃", progress: 3.2, target: 5, unit: "km", calories: 220),
+                WidgetGoalSnapshot(id: UUID(), name: "Walk", emoji: "🚶", progress: 4200, target: 10000, unit: "steps", calories: 120)
+            ]
+        )
+    }
+
+    #Preview("Lock Screen Circular", as: .accessoryCircular) {
+        MindSnapWidget()
+    } timeline: {
+        MindSnapWidgetEntry(
+            date: Date(),
+            todaysMood: nil,
+            entryCount: 1,
+            streakCount: 2,
+            lastEntryPreview: nil,
+            goalName: "Walk",
+            goalProgress: 3900,
+            goalTarget: 10000,
+            goalUnit: "steps",
+            completedGoalsToday: 1,
+            totalGoalsToday: 3,
+            widgetGoals: [
+                WidgetGoalSnapshot(id: UUID(), name: "Walk", emoji: "🚶", progress: 3900, target: 10000, unit: "steps", calories: 0)
+            ]
+        )
+    }
+
+    #Preview("Lock Screen Rectangular", as: .accessoryRectangular) {
+        MindSnapWidget()
+    } timeline: {
+        MindSnapWidgetEntry(
+            date: Date(),
+            todaysMood: nil,
+            entryCount: 1,
+            streakCount: 2,
+            lastEntryPreview: nil,
+            goalName: "Goals",
+            goalProgress: 3900,
+            goalTarget: 10000,
+            goalUnit: "steps",
+            completedGoalsToday: 1,
+            totalGoalsToday: 3,
+            widgetGoals: [
+                WidgetGoalSnapshot(id: UUID(), name: "Walk", emoji: "🚶", progress: 3900, target: 10000, unit: "steps", calories: 0)
+            ]
+        )
+    }
+
+    #Preview("Lock Screen Inline", as: .accessoryInline) {
+        MindSnapWidget()
+    } timeline: {
+        MindSnapWidgetEntry(
+            date: Date(),
+            todaysMood: nil,
+            entryCount: 1,
+            streakCount: 2,
+            lastEntryPreview: nil,
+            goalName: "Goals",
+            goalProgress: 3900,
+            goalTarget: 10000,
+            goalUnit: "steps",
+            completedGoalsToday: 1,
+            totalGoalsToday: 3,
+            widgetGoals: [
+                WidgetGoalSnapshot(id: UUID(), name: "Walk", emoji: "🚶", progress: 3900, target: 10000, unit: "steps", calories: 0)
+            ]
         )
     }
 }

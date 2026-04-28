@@ -79,9 +79,16 @@ struct SettingsView: View {
     @AppStorage("reminderHour") private var reminderHour = 20
     @AppStorage("userName") private var userName = ""
     @AppStorage("appColorScheme") private var appColorScheme = AppColorScheme.system.rawValue
+    @AppStorage(
+        "widgetGoalIDs",
+        store: UserDefaults(suiteName: "group.com.pratik.MindSnap")
+    )
+    private var widgetGoalIDsRaw = ""
 
     // ---- Services ----
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Goal.createdAt, order: .reverse)
+    private var settingsGoals: [Goal]
     @State private var notificationService = NotificationService()
     @State private var authService = AuthService()
     @State private var healthKitService = HealthKitService()
@@ -115,6 +122,7 @@ struct SettingsView: View {
     var body: some View {
         List {
             profileSection
+            widgetGoalsSection
             securitySection
             appearanceSection
             notificationsSection
@@ -238,6 +246,58 @@ struct SettingsView: View {
             Text("Profile")
         }
     }
+
+    private var widgetGoalsSection: some View {
+        Section {
+            if activeWidgetCandidateGoals.isEmpty {
+                Text("Create an active goal to customize your widgets.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(activeWidgetCandidateGoals.prefix(8), id: \.id) { goal in
+                    Button {
+                        toggleWidgetGoal(goal)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text(goal.emoji)
+                                .font(.title3)
+                                .frame(width: 28)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(goal.name)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                Text("\(goal.category.rawValue) • \(goal.goalType.rawValue)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+
+                            Spacer()
+
+                            if selectedWidgetGoalIDs.contains(goal.id) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.purple)
+                            } else {
+                                Image(systemName: "circle")
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(
+                        !selectedWidgetGoalIDs.contains(goal.id) &&
+                        selectedWidgetGoalIDs.count >= 4
+                    )
+                }
+            }
+        } header: {
+            Text("Widget Goals")
+        } footer: {
+            Text("Choose up to 4 active goals for widgets. Small and Lock Screen widgets show only what fits. Widgets are visible on your Home Screen and Lock Screen, so MindSnap shows short goal progress only, not private journal entries or mood details.")
+        }
+    }
+
 
     private var securitySection: some View {
         Section {
@@ -922,6 +982,8 @@ struct SettingsView: View {
         for key in keys {
             UserDefaults.standard.removeObject(forKey: key)
         }
+        UserDefaults(suiteName: "group.com.pratik.MindSnap")?
+            .removeObject(forKey: "widgetGoalIDs")
 
         isFaceIDEnabled = false
         showMoodOnHome = true
@@ -931,6 +993,33 @@ struct SettingsView: View {
         userName = ""
         appColorScheme = AppColorScheme.system.rawValue
         UserPoints.reset()
+    }
+
+    private var activeWidgetCandidateGoals: [Goal] {
+        settingsGoals.filter { $0.isActive }
+    }
+
+    private var selectedWidgetGoalIDs: [UUID] {
+        widgetGoalIDsRaw
+            .split(separator: ",")
+            .compactMap { UUID(uuidString: String($0)) }
+    }
+
+    private func toggleWidgetGoal(_ goal: Goal) {
+        var selected = selectedWidgetGoalIDs
+        if selected.contains(goal.id) {
+            selected.removeAll { $0 == goal.id }
+        } else {
+            guard selected.count < 4 else { return }
+            selected.append(goal.id)
+        }
+
+        let activeIDs = Set(activeWidgetCandidateGoals.map(\.id))
+        widgetGoalIDsRaw = selected
+            .filter { activeIDs.contains($0) }
+            .map(\.uuidString)
+            .joined(separator: ",")
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func clearNotifications() {
@@ -958,13 +1047,13 @@ struct SettingsView: View {
     NavigationStack {
         SettingsView()
     }
-    .modelContainer(for: JournalEntry.self, inMemory: true)
+    .modelContainer(for: [JournalEntry.self, Goal.self], inMemory: true)
 }
 
 #Preview("Dark Mode") {
     NavigationStack {
         SettingsView()
     }
-    .modelContainer(for: JournalEntry.self, inMemory: true)
+    .modelContainer(for: [JournalEntry.self, Goal.self], inMemory: true)
     .preferredColorScheme(.dark)
 }

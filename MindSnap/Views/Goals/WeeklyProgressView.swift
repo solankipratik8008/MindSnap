@@ -31,6 +31,18 @@ struct WeeklyProgressView: View {
     private let weekDayLabels = [
         "Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"
     ]
+    
+    private var brandPrimary: Color {
+        Color(red: 0.50, green: 0.12, blue: 0.85)
+    }
+
+    private var brandSecondary: Color {
+        Color(red: 0.88, green: 0.12, blue: 0.68)
+    }
+
+    private var brandAccent: Color {
+        Color(red: 0.10, green: 0.78, blue: 0.85)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -38,13 +50,15 @@ struct WeeklyProgressView: View {
             weeklyOverview
         }
         .background(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: 22)
                 .fill(cardBackground)
                 .shadow(
-                    color: .black.opacity(
-                        colorScheme == .dark ? 0.4 : 0.08
-                    ),
-                    radius: 12, x: 0, y: 4
+                    color: colorScheme == .dark
+                        ? Color.black.opacity(0.35)
+                        : brandPrimary.opacity(0.10),
+                    radius: 14,
+                    x: 0,
+                    y: 6
                 )
         )
         .onAppear {
@@ -70,10 +84,9 @@ struct WeeklyProgressView: View {
     // --------------------------------------------------------
     private var cardBackground: Color {
         colorScheme == .dark
-            ? Color(red: 0.15, green: 0.15, blue: 0.17)
+            ? Color(red: 0.13, green: 0.12, blue: 0.16)
             : Color.white
     }
-
     // --------------------------------------------------------
     // MARK: - Top Banner
     // --------------------------------------------------------
@@ -81,53 +94,66 @@ struct WeeklyProgressView: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    viewModel.currentLevel.color,
-                    viewModel.currentLevel.color.opacity(0.7)
+                    brandPrimary.opacity(colorScheme == .dark ? 0.95 : 0.92),
+                    brandSecondary.opacity(colorScheme == .dark ? 0.86 : 0.84),
+                    brandAccent.opacity(colorScheme == .dark ? 0.30 : 0.22)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
 
-            // Decorative circles
-            Circle()
-                .fill(Color.white.opacity(0.08))
-                .frame(width: 130, height: 130)
-                .offset(x: 130, y: -30)
+            // Minimal premium shine instead of large bubbles
+            LinearGradient(
+                colors: [
+                    Color.white.opacity(colorScheme == .dark ? 0.10 : 0.18),
+                    Color.white.opacity(0.02),
+                    Color.clear
+                ],
+                startPoint: .topTrailing,
+                endPoint: .bottomLeading
+            )
 
-            Circle()
-                .fill(Color.white.opacity(0.05))
-                .frame(width: 90, height: 90)
-                .offset(x: -110, y: 45)
+            RoundedRectangle(cornerRadius: 22)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(colorScheme == .dark ? 0.20 : 0.30),
+                            Color.white.opacity(0.04)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+                .padding(0.5)
 
             VStack(spacing: 10) {
 
-                // ---- Level + Points + Streak row ----
                 HStack(alignment: .center, spacing: 12) {
 
-                    // Level badge
-                    HStack(spacing: 8) {
+                    HStack(spacing: 9) {
                         Text(viewModel.currentLevel.emoji)
                             .font(.title2)
 
-                        VStack(alignment: .leading, spacing: 1) {
+                        VStack(alignment: .leading, spacing: 2) {
                             Text(viewModel.currentLevel.rawValue)
                                 .font(.subheadline)
                                 .fontWeight(.bold)
                                 .foregroundStyle(.white)
+
                             Text("Current Level")
                                 .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.7))
+                                .foregroundStyle(.white.opacity(0.78))
                         }
                     }
 
                     Spacer()
 
-                    // ---- STREAK DISPLAY — FIXED ----
-                    // Shows overall streak across all goals
                     VStack(alignment: .center, spacing: 1) {
                         HStack(spacing: 3) {
                             Text("🔥")
                                 .font(.subheadline)
+
                             Text("\(animatedStreak)")
                                 .font(.title3)
                                 .fontWeight(.bold)
@@ -135,18 +161,22 @@ struct WeeklyProgressView: View {
                                 .monospacedDigit()
                                 .contentTransition(.numericText())
                         }
+
                         Text("day streak")
                             .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(.white.opacity(0.74))
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 7)
                     .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.white.opacity(0.15))
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.white.opacity(colorScheme == .dark ? 0.13 : 0.16))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                            )
                     )
 
-                    // Points display
                     VStack(alignment: .trailing, spacing: 1) {
                         HStack(spacing: 4) {
                             Text("\(animatedPoints)")
@@ -155,35 +185,48 @@ struct WeeklyProgressView: View {
                                 .foregroundStyle(.white)
                                 .contentTransition(.numericText())
                                 .monospacedDigit()
+
                             Text("⭐")
                                 .font(.title3)
                         }
+
                         Text("Total Points")
                             .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.7))
+                            .foregroundStyle(.white.opacity(0.74))
                     }
                 }
 
-                // ---- Level progress bar ----
-                VStack(spacing: 4) {
+                VStack(spacing: 5) {
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.white.opacity(0.25))
+                            Capsule()
+                                .fill(Color.white.opacity(0.22))
                                 .frame(height: 8)
 
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.white)
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white,
+                                            Color.white.opacity(0.86)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
                                 .frame(
                                     width: max(
                                         8,
                                         geo.size.width *
-                                        CGFloat(
-                                            UserPoints
-                                                .progressToNextLevel
-                                        )
+                                        CGFloat(UserPoints.progressToNextLevel)
                                     ),
                                     height: 8
+                                )
+                                .shadow(
+                                    color: .white.opacity(0.18),
+                                    radius: 4,
+                                    x: 0,
+                                    y: 1
                                 )
                                 .animation(
                                     .spring(duration: 0.8),
@@ -196,19 +239,20 @@ struct WeeklyProgressView: View {
                     HStack {
                         Text(viewModel.currentLevel.message)
                             .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.8))
+                            .foregroundStyle(.white.opacity(0.82))
+                            .lineLimit(1)
+
                         Spacer()
+
                         if viewModel.currentLevel != .champion {
-                            Text(
-                                "\(UserPoints.pointsToNextLevel)" +
-                                " pts to next level"
-                            )
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.7))
+                            Text("\(UserPoints.pointsToNextLevel) pts to next level")
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.76))
+                                .lineLimit(1)
                         } else {
                             Text("Max Level! 🏆")
                                 .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.8))
+                                .foregroundStyle(.white.opacity(0.82))
                         }
                     }
                 }
@@ -218,10 +262,10 @@ struct WeeklyProgressView: View {
         .frame(height: 140)
         .clipShape(
             UnevenRoundedRectangle(
-                topLeadingRadius: 20,
+                topLeadingRadius: 22,
                 bottomLeadingRadius: 0,
                 bottomTrailingRadius: 0,
-                topTrailingRadius: 20
+                topTrailingRadius: 22
             )
         )
     }
@@ -269,7 +313,11 @@ struct WeeklyProgressView: View {
                             )
                         )
                         .stroke(
-                            viewModel.currentLevel.color,
+                            LinearGradient(
+                                colors: [brandPrimary, brandSecondary],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
                             style: StrokeStyle(
                                 lineWidth: 5,
                                 lineCap: .round
@@ -286,7 +334,7 @@ struct WeeklyProgressView: View {
                         "\(Int(viewModel.weeklyCompletionRate * 100))%"
                     )
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(viewModel.currentLevel.color)
+                    .foregroundStyle(brandSecondary)
                 }
             }
 
@@ -342,7 +390,7 @@ struct WeeklyProgressView: View {
                         )
                         .foregroundStyle(
                             isToday(index: index)
-                                ? viewModel.currentLevel.color
+                                 ? brandSecondary
                                 : Color.secondary
                         )
                         .frame(maxWidth: .infinity)
@@ -480,36 +528,42 @@ struct WeeklyProgressView: View {
         HStack(spacing: 8) {
             Text("🎉")
                 .font(.subheadline)
+
             VStack(alignment: .leading, spacing: 1) {
                 Text("All goals completed today!")
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundStyle(.primary)
+
                 Text("Bonus +25 ⭐ awarded")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
+
             Spacer()
+
             Text("+25 ⭐")
                 .font(.caption)
                 .fontWeight(.bold)
-                .foregroundStyle(.yellow)
+                .foregroundStyle(brandSecondary)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 14)
                 .fill(
-                    colorScheme == .dark
-                        ? Color.purple.opacity(0.2)
-                        : Color.purple.opacity(0.08)
+                    LinearGradient(
+                        colors: [
+                            brandPrimary.opacity(colorScheme == .dark ? 0.18 : 0.07),
+                            brandSecondary.opacity(colorScheme == .dark ? 0.16 : 0.06)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(
-                            Color.purple.opacity(0.2),
-                            lineWidth: 1
-                        )
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(brandSecondary.opacity(0.18), lineWidth: 1)
                 )
         )
     }

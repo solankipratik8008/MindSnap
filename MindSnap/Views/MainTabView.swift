@@ -265,7 +265,6 @@ struct MainTabView: View {
         switch phase {
         case .background:
             authService.lockApp()
-            WidgetCenter.shared.reloadAllTimelines()
 
         case .active:
             if !isFaceIDEnabled {

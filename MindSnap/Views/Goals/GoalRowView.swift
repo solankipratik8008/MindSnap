@@ -27,7 +27,9 @@ struct GoalRowView: View {
     let goal: Goal
     let viewModel: GoalViewModel
     var isTomorrowPreview: Bool = false
+    var isCompact: Bool = false
 
+    @State private var completionPulse = false
     @State private var showingBurst = false
     @State private var showingPoints = false
     @State private var isPressed = false
@@ -36,27 +38,55 @@ struct GoalRowView: View {
     @State private var showingManualEditSheet = false
     @State private var manualEditValue: Double = 0
     @State private var manualEditText: String = "0"
+    @State private var isResyncingHealth = false
+
     @FocusState private var isManualEditFocused: Bool
 
     @Environment(\.colorScheme) private var colorScheme
 
     private var isHealthTrackedGoal: Bool {
         goal.isHealthKitLinked ||
-        goal.activityType == .walking ||
-        goal.activityType == .running ||
-        goal.activityType == .cycling
+        HealthKitService.healthSupportedActivityTypes.contains(goal.activityType) ||
+        isCaloriesUnit(goal.unit)
     }
 
+    private var caloriesBurned: Double {
+        viewModel.caloriesBurned(for: goal)
+    }
+
+    private var shouldShowCalories: Bool {
+        guard !isTomorrowPreview else { return false }
+        guard caloriesBurned > 0 else { return false }
+
+        switch goal.activityType {
+        case .walking, .running, .cycling, .swimming, .gym, .yoga:
+            return true
+        default:
+            return isCaloriesUnit(goal.unit)
+        }
+    }
     private var todaysProgress: Double {
-        viewModel.todaysProgressValue(for: goal)
+        if isTomorrowPreview {
+            return 0
+        }
+
+        return viewModel.todaysProgressValue(for: goal)
     }
 
     private var isCompleted: Bool {
-        viewModel.isCompletedToday(goal)
+        if isTomorrowPreview {
+            return false
+        }
+
+        return viewModel.isCompletedToday(goal)
     }
 
     private var isLocked: Bool {
-        viewModel.isLockedForEditing(goal)
+        if isTomorrowPreview {
+            return false
+        }
+
+        return viewModel.isLockedForEditing(goal)
     }
 
     private var isExpiring: Bool {
@@ -75,6 +105,15 @@ struct GoalRowView: View {
         viewModel.partialPointsFor(goal)
     }
 
+    private var progressPercent: Double {
+        guard goal.targetValue > 0 else { return 0 }
+        return min(1, max(0, todaysProgress / Double(goal.targetValue)))
+    }
+
+    private var progressPercentText: String {
+        "\(Int((progressPercent * 100).rounded()))%"
+    }
+
     // --------------------------------------------------------
     // MARK: - Body
     // --------------------------------------------------------
@@ -89,16 +128,24 @@ struct GoalRowView: View {
                     color: goal.color,
                     isShowing: showingBurst
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .opacity(showingBurst ? 1 : 0)
+                .allowsHitTesting(false)
+                .zIndex(10)
             }
 
             VStack {
                 PointsPopupView(
-                    points: viewModel.lastPointsEarned,
+                    points: max(viewModel.lastPointsEarned, 1),
                     isShowing: showingPoints
                 )
                 Spacer()
             }
+            .opacity(showingPoints ? 1 : 0)
             .allowsHitTesting(false)
+            .zIndex(11)
+
+
 
             if showingLockedWarning {
                 VStack {
@@ -143,6 +190,16 @@ struct GoalRowView: View {
     // MARK: - Card Content
     // --------------------------------------------------------
     private var cardContent: some View {
+        Group {
+            if isCompact {
+                compactCardContent
+            } else {
+                fullCardContent
+            }
+        }
+    }
+
+    private var fullCardContent: some View {
         VStack(spacing: 0) {
 
             // Priority banner (High only)
@@ -191,6 +248,15 @@ struct GoalRowView: View {
                     .padding(.bottom, 6)
             }
 
+            if isHealthTrackedGoal &&
+               goal.goalType == .progress &&
+               !isTomorrowPreview &&
+               !isLocked {
+                healthSyncActionRow
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 7)
+            }
+
             // Weekly dots
             weeklyDotsRow
                 .padding(.horizontal, 14)
@@ -204,14 +270,14 @@ struct GoalRowView: View {
             }
         }
         .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: 22))
         .overlay(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: 20)
                 .stroke(cardBorderColor, lineWidth: 1.5)
         )
         .overlay(
             // Expiry pulse border
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: 22)
                 .stroke(
                     Color.orange.opacity(
                         isExpiring && !isCompleted &&
@@ -230,10 +296,361 @@ struct GoalRowView: View {
             radius: isCompleted ? 8 : 3,
             x: 0, y: 2
         )
-        .scaleEffect(isPressed ? 0.97 : 1.0)
+        .scaleEffect(completionPulse ? 1.035 : (isPressed ? 0.97 : 1.0))
         .opacity(isTomorrowPreview ? 0.5 : 1.0)
+        .shadow(
+            color: completionPulse
+                ? goal.color.opacity(colorScheme == .dark ? 0.28 : 0.22)
+                : cardShadowColor,
+            radius: completionPulse ? 14 : (isCompleted ? 8 : 3),
+            x: 0,
+            y: completionPulse ? 6 : 2
+        )
         .animation(.spring(duration: 0.2), value: isPressed)
+        .animation(.spring(response: 0.32, dampingFraction: 0.62), value: completionPulse)
         .animation(.spring(duration: 0.3), value: isCompleted)
+    }
+
+    // --------------------------------------------------------
+    // MARK: - Compact Card Content
+    // --------------------------------------------------------
+    private var compactCardContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                compactGoalIcon
+
+                Spacer(minLength: 6)
+
+                if isTomorrowPreview {
+                    compactTomorrowBadge
+                } else {
+                    compactCompletionButton
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(goal.name)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(isCompleted ? goal.color : .primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                HStack(spacing: 4) {
+                    if streak > 0 && !isTomorrowPreview {
+                        Image(systemName: "flame.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.orange)
+
+                        Text("\(streak)d streak")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    } else {
+                        Text(isTomorrowPreview ? "Tomorrow" : goal.category.rawValue)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            if goal.goalType == .progress {
+                compactProgressRing
+                    .frame(maxWidth: .infinity, alignment: .center)
+
+                Text("\(formattedProgress(todaysProgress)) / \(formattedProgress(Double(goal.targetValue))) \(goal.unit)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else {
+                Spacer(minLength: 8)
+
+                Text(isCompleted ? "Completed" : "Tap to complete")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(isCompleted ? goal.color : .secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+
+                Spacer(minLength: 8)
+            }
+
+            if !isTomorrowPreview && goal.goalType == .progress && !isLocked {
+                compactActionsRow
+            }
+
+            if shouldShowCalories {
+                compactCaloriesRow
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 190, alignment: .topLeading)
+        .background(compactCardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22)
+                .stroke(compactCardBorderColor, lineWidth: 1)
+        )
+        .shadow(
+            color: completionPulse
+                ? goal.color.opacity(colorScheme == .dark ? 0.26 : 0.20)
+                : (colorScheme == .dark ? .clear : goal.color.opacity(0.07)),
+            radius: completionPulse ? 14 : 8,
+            x: 0,
+            y: completionPulse ? 7 : 4
+        )
+        .scaleEffect(completionPulse ? 1.04 : (isPressed ? 0.97 : 1.0))
+        .opacity(isTomorrowPreview ? 0.58 : 1.0)
+        .animation(.spring(duration: 0.2), value: isPressed)
+        .animation(.spring(response: 0.32, dampingFraction: 0.62), value: completionPulse)
+        .animation(.spring(duration: 0.3), value: isCompleted)
+    }
+
+    private var compactGoalIcon: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            goal.color.opacity(colorScheme == .dark ? 0.24 : 0.14),
+                            goal.secondaryColor.opacity(colorScheme == .dark ? 0.14 : 0.08)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 38, height: 38)
+
+            if isCompleted {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(goal.color)
+            } else if goal.emoji.count == 1 &&
+                      goal.emoji.unicodeScalars.first?.properties.isEmoji == true {
+                Text(goal.emoji)
+                    .font(.system(size: 19))
+            } else {
+                Image(systemName: goal.sfSymbol)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(goal.color)
+            }
+        }
+    }
+
+    private var compactCompletionButton: some View {
+        Button {
+            if goal.goalType == .checkbox {
+                handleCheckboxTap()
+            } else if isLocked {
+                showLockedWarning()
+            }
+        } label: {
+            Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(isCompleted ? goal.color : Color(.systemGray3))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var compactTomorrowBadge: some View {
+        Image(systemName: "moon.stars.fill")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .padding(7)
+            .background(
+                Circle()
+                    .fill(Color(.systemGray5).opacity(colorScheme == .dark ? 0.25 : 0.8))
+            )
+    }
+
+    private var compactProgressRing: some View {
+        ZStack {
+            Circle()
+                .stroke(
+                    colorScheme == .dark
+                    ? Color.white.opacity(0.10)
+                    : Color.black.opacity(0.06),
+                    lineWidth: 7
+                )
+                .frame(width: 74, height: 74)
+
+            Circle()
+                .trim(from: 0, to: progressPercent)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            goal.color.opacity(0.92),
+                            goal.secondaryColor.opacity(0.82)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    style: StrokeStyle(lineWidth: 7, lineCap: .round)
+                )
+                .frame(width: 74, height: 74)
+                .rotationEffect(.degrees(-90))
+                .animation(.spring(duration: 0.45), value: progressPercent)
+
+            VStack(spacing: 1) {
+                Text(progressPercentText)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(goal.color)
+
+                if !goal.unit.isEmpty {
+                    Text(goal.unit)
+                        .font(.system(size: 8, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var compactActionsRow: some View {
+        if isHealthTrackedGoal {
+            HStack(spacing: 6) {
+                compactEditButton
+                compactSyncButton
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+        } else {
+            HStack(spacing: 6) {
+                Button {
+                    if isLocked {
+                        showLockedWarning()
+                    } else {
+                        viewModel.decrementProgress(goal)
+                    }
+                } label: {
+                    Image(systemName: "minus")
+                        .font(.system(size: 10, weight: .bold))
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Color(.systemGray5).opacity(colorScheme == .dark ? 0.25 : 0.9)))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(todaysProgress > 0 ? goal.color : Color(.systemGray3))
+                .disabled(todaysProgress == 0 && !isLocked)
+
+                compactEditButton
+
+                Button {
+                    if isLocked {
+                        showLockedWarning()
+                    } else {
+                        handleProgressIncrement()
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .bold))
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(goal.color.opacity(colorScheme == .dark ? 0.13 : 0.08)))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(goal.color)
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+
+    private var compactEditButton: some View {
+        Button {
+            manualEditValue = todaysProgress
+            manualEditText = rawProgressInput(todaysProgress)
+            showingManualEditSheet = true
+        } label: {
+            Label("Edit", systemImage: "pencil")
+                .font(.system(size: 10, weight: .semibold))
+                .labelStyle(.titleAndIcon)
+                .lineLimit(1)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(Color(.systemGray5).opacity(colorScheme == .dark ? 0.25 : 0.9))
+        )
+    }
+
+    private var compactSyncButton: some View {
+        Button {
+            resyncHealthFromCard()
+        } label: {
+            HStack(spacing: 4) {
+                if isResyncingHealth {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                }
+
+                Text("Sync")
+            }
+            .font(.system(size: 10, weight: .semibold))
+            .lineLimit(1)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(goal.color)
+        .disabled(isResyncingHealth || viewModel.isHealthSyncInProgress)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(goal.color.opacity(colorScheme == .dark ? 0.13 : 0.08))
+        )
+    }
+
+    private var compactCaloriesRow: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "flame.fill")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.orange.opacity(0.9))
+
+            Text("\(Int(caloriesBurned)) cal")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    private var compactCardBackground: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 22)
+                .fill(
+                    colorScheme == .dark
+                    ? Color(red: 0.15, green: 0.15, blue: 0.17)
+                    : Color.white
+                )
+
+            LinearGradient(
+                colors: [
+                    goal.color.opacity(colorScheme == .dark ? 0.10 : 0.035),
+                    Color(red: 0.88, green: 0.12, blue: 0.68)
+                        .opacity(colorScheme == .dark ? 0.05 : 0.025),
+                    Color.clear
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 22))
+        }
+    }
+
+    private var compactCardBorderColor: Color {
+        if isCompleted {
+            return goal.color.opacity(colorScheme == .dark ? 0.25 : 0.14)
+        }
+
+        if goal.priority == .high {
+            return Color.red.opacity(colorScheme == .dark ? 0.22 : 0.16)
+        }
+
+        return colorScheme == .dark
+            ? Color.white.opacity(0.07)
+            : Color.black.opacity(0.045)
     }
 
     // --------------------------------------------------------
@@ -242,31 +659,26 @@ struct GoalRowView: View {
     private var priorityBanner: some View {
         HStack(spacing: 6) {
             Image(systemName: goal.priority.icon)
-                .font(.system(size: 10))
-                .foregroundStyle(goal.priority.color)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(goal.priority.color.opacity(0.85))
 
-            Text(
-                "\(goal.priority.emoji) " +
-                "\(goal.priority.displayName) Priority"
-            )
-            .font(.system(size: 10))
-            .fontWeight(.semibold)
-            .foregroundStyle(goal.priority.color)
+            Text("\(goal.priority.emoji) \(goal.priority.displayName) Priority")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(goal.priority.color.opacity(0.85))
 
             Spacer()
 
             if goal.activityType == .medicine {
-                Text("💊 Take your medicine!")
-                    .font(.system(size: 10))
-                    .fontWeight(.medium)
-                    .foregroundStyle(goal.priority.color)
+                Text("💊 Reminder")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(goal.priority.color.opacity(0.75))
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 5)
         .background(
             goal.priority.color.opacity(
-                colorScheme == .dark ? 0.15 : 0.08
+                colorScheme == .dark ? 0.10 : 0.045
             )
         )
     }
@@ -665,20 +1077,20 @@ struct GoalRowView: View {
     private var progressBar: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 5)
+                Capsule()
                     .fill(
                         colorScheme == .dark
-                            ? Color.white.opacity(0.1)
-                            : Color(.systemGray5)
+                        ? Color.white.opacity(0.10)
+                        : Color.black.opacity(0.055)
                     )
-                    .frame(height: 7)
+                    .frame(height: 6)
 
-                RoundedRectangle(cornerRadius: 5)
+                Capsule()
                     .fill(
                         LinearGradient(
                             colors: [
-                                goal.color,
-                                goal.secondaryColor
+                                goal.color.opacity(0.9),
+                                goal.secondaryColor.opacity(0.85)
                             ],
                             startPoint: .leading,
                             endPoint: .trailing
@@ -686,7 +1098,7 @@ struct GoalRowView: View {
                     )
                     .frame(
                         width: max(
-                            7,
+                            6,
                             geo.size.width *
                             min(
                                 1,
@@ -694,15 +1106,18 @@ struct GoalRowView: View {
                                 CGFloat(max(1, goal.targetValue))
                             )
                         ),
-                        height: 7
+                        height: 6
                     )
-                    .animation(
-                        .spring(duration: 0.4),
-                        value: todaysProgress
+                    .shadow(
+                        color: goal.color.opacity(colorScheme == .dark ? 0.18 : 0.12),
+                        radius: 3,
+                        x: 0,
+                        y: 1
                     )
+                    .animation(.spring(duration: 0.4), value: todaysProgress)
             }
         }
-        .frame(height: 7)
+        .frame(height: 6)
     }
 
     // --------------------------------------------------------
@@ -711,13 +1126,12 @@ struct GoalRowView: View {
     private var partialPointsPreview: some View {
         HStack(spacing: 6) {
             Image(systemName: "star.leadinghalf.filled")
-                .font(.caption2)
-                .foregroundStyle(.orange)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.orange.opacity(0.85))
 
             Text("~\(partialPoints) pts at day end")
-                .font(.caption2)
-                .foregroundStyle(.orange)
-                .fontWeight(.medium)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.orange.opacity(0.85))
 
             Spacer()
 
@@ -725,18 +1139,16 @@ struct GoalRowView: View {
                 todaysProgress /
                 Double(max(1, goal.targetValue)) * 100
             )
+
             Text("\(pct)%")
-                .font(.caption2)
-                .fontWeight(.bold)
-                .foregroundStyle(.orange)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(.orange.opacity(0.85))
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.orange.opacity(
-                    colorScheme == .dark ? 0.12 : 0.07
-                ))
+            Capsule()
+                .fill(Color.orange.opacity(colorScheme == .dark ? 0.12 : 0.055))
         )
     }
 
@@ -749,20 +1161,82 @@ struct GoalRowView: View {
             manualEditText = rawProgressInput(todaysProgress)
             showingManualEditSheet = true
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 Image(systemName: "pencil.circle")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary.opacity(0.85))
+
                 Text("Edit manually")
-                    .font(.caption2)
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
+
                 Spacer()
+
                 Text("Left your phone behind?")
-                    .font(.system(size: 9))
+                    .font(.system(size: 9, weight: .regular))
                     .foregroundStyle(.tertiary)
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+    }
+
+    private var healthSyncActionRow: some View {
+        HStack(spacing: 8) {
+            Button {
+                resyncHealthFromCard()
+            } label: {
+                HStack(spacing: 5) {
+                    if isResyncingHealth {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+
+                    Text("Re-sync")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .foregroundStyle(goal.color.opacity(0.9))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule()
+                        .fill(goal.color.opacity(colorScheme == .dark ? 0.12 : 0.075))
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(isResyncingHealth || viewModel.isHealthSyncInProgress)
+
+            if let lastSync = viewModel.lastHealthSyncDate(for: goal) {
+                Text(lastSync.formatted(date: .omitted, time: .shortened))
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer(minLength: 8)
+
+            if shouldShowCalories {
+                HStack(spacing: 4) {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.orange.opacity(0.85))
+
+                    Text("\(Int(caloriesBurned)) cal")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary)
+
+                    if isCaloriesUnit(goal.unit) {
+                        Text("• \(max(0, goal.targetValue - Int(caloriesBurned))) left")
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            }
+        }
     }
 
     // --------------------------------------------------------
@@ -873,6 +1347,67 @@ struct GoalRowView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .fill(Color(.systemBackground))
                 )
+
+                if isHealthTrackedGoal {
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "heart.text.square.fill")
+                                .font(.caption)
+                                .foregroundStyle(.pink)
+                            Text(
+                                viewModel.isUsingManualHealthOverride(for: goal)
+                                    ? "Manual override is active"
+                                    : "Apple Health sync available"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+
+                        if let lastSync = viewModel.lastHealthSyncDate(for: goal) {
+                            Text("Last synced: \(lastSync.formatted(date: .omitted, time: .shortened))")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Button {
+                            dismissKeyboard()
+                            isManualEditFocused = false
+                            isResyncingHealth = true
+                            Task {
+                                _ = await viewModel.resyncWithAppleHealth(for: goal)
+                                await MainActor.run {
+                                    manualEditValue = todaysProgress
+                                    manualEditText = rawProgressInput(todaysProgress)
+                                    isResyncingHealth = false
+                                    showingManualEditSheet = false
+                                }
+                            }
+                        } label: {
+                            HStack {
+                                if isResyncingHealth {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                } else {
+                                    Image(systemName: "arrow.triangle.2.circlepath")
+                                }
+                                Text("Re-sync with Apple Health")
+                                    .fontWeight(.semibold)
+                                Spacer()
+                            }
+                            .font(.subheadline)
+                            .foregroundStyle(.blue)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.blue.opacity(0.08))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isResyncingHealth || viewModel.isHealthSyncInProgress)
+                    }
+                    .padding(.horizontal, 4)
+                }
 
                 Spacer()
 
@@ -996,53 +1531,39 @@ struct GoalRowView: View {
     // --------------------------------------------------------
     private var weeklyDotsRow: some View {
         HStack(spacing: 0) {
-            let days = ["M","T","W","T","F","S","S"]
-            ForEach(
-                Array(weeklyDots.enumerated()),
-                id: \.offset
-            ) { index, completed in
+            let days = ["M", "T", "W", "T", "F", "S", "S"]
+
+            ForEach(Array(weeklyDots.enumerated()), id: \.offset) { index, completed in
                 let isToday = isCurrentDay(index: index)
                 let isFuture = isFutureDay(index: index)
 
-                VStack(spacing: 3) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                isFuture
-                                    ? Color(.systemGray5)
-                                        .opacity(0.4)
-                                    : completed
-                                        ? goal.color
-                                        : colorScheme == .dark
-                                            ? Color.white
-                                                .opacity(0.15)
-                                            : Color(.systemGray4)
-                                                .opacity(0.5)
-                            )
-                            .frame(width: 8, height: 8)
-                            .animation(
-                                .spring(duration: 0.3),
-                                value: completed
-                            )
-
-                        if isToday {
-                            Circle()
-                                .stroke(
-                                    goal.color,
-                                    lineWidth: 1.5
-                                )
-                                .frame(width: 13, height: 13)
+                VStack(spacing: 4) {
+                    Circle()
+                        .fill(
+                            completed
+                            ? goal.color.opacity(isTomorrowPreview ? 0.35 : 0.85)
+                            : isToday
+                                ? goal.color.opacity(0.22)
+                                : isFuture
+                                    ? Color(.systemGray5).opacity(0.45)
+                                    : Color(.systemGray4).opacity(0.35)
+                        )
+                        .frame(width: isToday ? 9 : 7, height: isToday ? 9 : 7)
+                        .overlay {
+                            if isToday {
+                                Circle()
+                                    .stroke(goal.color.opacity(0.75), lineWidth: 1)
+                            }
                         }
-                    }
+                        .animation(.spring(duration: 0.25), value: completed)
 
                     Text(days[index])
-                        .font(.system(size: 8))
+                        .font(.system(size: 8, weight: isToday ? .semibold : .regular))
                         .foregroundStyle(
                             isToday
-                                ? goal.color
-                                : Color.secondary.opacity(0.6)
+                            ? goal.color.opacity(0.85)
+                            : Color.secondary.opacity(0.55)
                         )
-                        .fontWeight(isToday ? .bold : .regular)
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -1053,84 +1574,65 @@ struct GoalRowView: View {
     // MARK: - Adaptive Card Colors
     // --------------------------------------------------------
     private var cardBackground: some View {
-        Group {
-            if isTomorrowPreview {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(
-                        colorScheme == .dark
-                            ? Color(
-                                red: 0.14, green: 0.14,
-                                blue: 0.15
-                              )
-                            : Color(.systemGray6)
-                    )
-            } else if isCompleted {
-                if colorScheme == .dark {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(goal.color.opacity(0.1))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18)
-                                .fill(
-                                    Color(
-                                        red: 0.17,
-                                        green: 0.17,
-                                        blue: 0.18
-                                    ).opacity(0.85)
-                                )
-                        )
-                } else {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(goal.color.opacity(0.04))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 18)
-                                .fill(Color.white.opacity(0.97))
-                        )
-                }
-            } else {
-                if colorScheme == .dark {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(Color(
-                            red: 0.17, green: 0.17,
-                            blue: 0.18
-                        ))
-                } else {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(Color.white)
-                }
+        ZStack {
+            RoundedRectangle(cornerRadius: 22)
+                .fill(
+                    colorScheme == .dark
+                    ? Color(red: 0.15, green: 0.15, blue: 0.17)
+                    : Color.white
+                )
+
+            if !isTomorrowPreview {
+                LinearGradient(
+                    colors: [
+                        goal.color.opacity(colorScheme == .dark ? 0.10 : 0.035),
+                        goal.secondaryColor.opacity(colorScheme == .dark ? 0.06 : 0.02),
+                        Color.clear
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 22))
             }
         }
     }
 
     private var cardBorderColor: Color {
-        if isTomorrowPreview { return Color.clear }
+        if isTomorrowPreview {
+            return Color.clear
+        }
+
         if isCompleted {
-            return goal.color.opacity(
-                colorScheme == .dark ? 0.5 : 0.25
-            )
+            return goal.color.opacity(colorScheme == .dark ? 0.24 : 0.14)
         }
+
         if goal.priority == .high {
-            return goal.priority.color.opacity(0.3)
+            return goal.priority.color.opacity(colorScheme == .dark ? 0.22 : 0.16)
         }
+
         if isExpiring {
-            return Color.orange.opacity(0.3)
+            return Color.orange.opacity(colorScheme == .dark ? 0.22 : 0.16)
         }
+
         return colorScheme == .dark
-            ? Color.white.opacity(0.08)
-            : Color.black.opacity(0.06)
+            ? Color.white.opacity(0.07)
+            : Color.black.opacity(0.045)
     }
 
     private var cardShadowColor: Color {
+        if colorScheme == .dark {
+            return Color.clear
+        }
+
         if isCompleted {
-            return goal.color.opacity(
-                colorScheme == .dark ? 0.2 : 0.1
-            )
+            return goal.color.opacity(0.06)
         }
+
         if goal.priority == .high {
-            return goal.priority.color.opacity(0.1)
+            return goal.priority.color.opacity(0.07)
         }
-        return Color.black.opacity(
-            colorScheme == .dark ? 0.0 : 0.05
-        )
+
+        return Color.black.opacity(0.045)
     }
 
     // --------------------------------------------------------
@@ -1159,37 +1661,89 @@ struct GoalRowView: View {
         withAnimation(.spring(duration: 0.15)) {
             isPressed = true
         }
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.15
-        ) {
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             withAnimation(.spring(duration: 0.15)) {
                 isPressed = false
             }
         }
 
         let wasCompleted = isCompleted
-        viewModel.completeCheckboxGoal(goal)
-        if !wasCompleted { triggerCompletionAnimations() }
+
+        if !wasCompleted {
+            triggerCompletionAnimations()
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                viewModel.completeCheckboxGoal(goal)
+            }
+        } else {
+            viewModel.completeCheckboxGoal(goal)
+        }
     }
 
     private func handleProgressIncrement() {
         let wasCompleted = isCompleted
-        viewModel.incrementProgress(goal)
-        if !wasCompleted && viewModel.isCompletedToday(goal) {
+
+        let predictedProgress = todaysProgress + 1
+        let willComplete =
+            !wasCompleted &&
+            predictedProgress >= Double(goal.targetValue)
+
+        if willComplete {
             triggerCompletionAnimations()
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                viewModel.incrementProgress(goal)
+            }
+        } else {
+            viewModel.incrementProgress(goal)
+        }
+    }
+
+    private func resyncHealthFromCard() {
+        guard !isResyncingHealth else { return }
+        isResyncingHealth = true
+        Task {
+            _ = await viewModel.resyncWithAppleHealth(for: goal)
+            await MainActor.run {
+                manualEditValue = todaysProgress
+                manualEditText = rawProgressInput(todaysProgress)
+                isResyncingHealth = false
+            }
         }
     }
 
     private func triggerCompletionAnimations() {
         showingBurst = false
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.1
-        ) { showingBurst = true }
-
         showingPoints = false
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 0.2
-        ) { showingPoints = true }
+        completionPulse = false
+
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.62)) {
+                completionPulse = true
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            showingBurst = true
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            showingPoints = true
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+                completionPulse = false
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) {
+            showingBurst = false
+            showingPoints = false
+        }
     }
 
     private func showLockedWarning() {
@@ -1283,6 +1837,15 @@ struct GoalRowView: View {
             normalized == "miles" ||
             normalized == "mi" ||
             normalized == "l"
+    }
+
+    private func isCaloriesUnit(_ unit: String) -> Bool {
+        let normalized = unit.lowercased()
+        return normalized == "cal" ||
+            normalized == "cals" ||
+            normalized == "calorie" ||
+            normalized == "calories" ||
+            normalized == "kcal"
     }
 
     private func formattedProgress(_ value: Double) -> String {

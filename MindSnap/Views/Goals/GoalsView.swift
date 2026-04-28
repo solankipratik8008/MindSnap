@@ -30,6 +30,12 @@ struct GoalsView: View {
     @State private var showingDeleteAlert = false
     @AppStorage("isHealthSyncEnabled")
     private var isHealthSyncEnabled = false
+    @State private var hasSyncedHealthThisSession = false
+
+    private let goalGridColumns = [
+        GridItem(.flexible(), spacing: 12),
+        GridItem(.flexible(), spacing: 12)
+    ]
 
     var body: some View {
         NavigationStack {
@@ -66,7 +72,10 @@ struct GoalsView: View {
                 viewModel = GoalViewModel(modelContext: modelContext)
             }
             viewModel?.handleNewDayRollover()
-            syncHealthProgressIfNeeded()
+            if !hasSyncedHealthThisSession {
+                hasSyncedHealthThisSession = true
+                syncHealthProgressIfNeeded()
+            }
         }
         // ---- One-time goals cleanup on new day ----
         .onReceive(
@@ -75,7 +84,8 @@ struct GoalsView: View {
             )
         ) { _ in
             viewModel?.handleNewDayRollover()
-            syncHealthProgressIfNeeded()
+            hasSyncedHealthThisSession = false
+            syncHealthProgressIfNeeded(force: true)
         }
         .sheet(isPresented: $showingAddGoal) {
             if let vm = viewModel {
@@ -262,12 +272,21 @@ struct GoalsView: View {
         }
         .background(
             LinearGradient(
-                colors: [Color.green.opacity(0.85), Color.green.opacity(0.65)],
+                colors: [
+                    Color.purple.opacity(colorScheme == .dark ? 0.68 : 0.76),
+                    Color.green.opacity(colorScheme == .dark ? 0.42 : 0.58)
+                ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .shadow(
+            color: Color.purple.opacity(colorScheme == .dark ? 0.0 : 0.10),
+            radius: 10,
+            x: 0,
+            y: 5
+        )
     }
 
     // --------------------------------------------------------
@@ -340,11 +359,13 @@ struct GoalsView: View {
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)
 
-                        ForEach(highPriority) { goal in
-                            goalRow(goal: goal, vm: vm)
-                                .padding(.horizontal, 16)
-                                .padding(.bottom, 10)
+                        LazyVGrid(columns: goalGridColumns, spacing: 12) {
+                            ForEach(highPriority) { goal in
+                                goalRow(goal: goal, vm: vm)
+                            }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 10)
                     }
                 }
 
@@ -365,11 +386,13 @@ struct GoalsView: View {
                             .padding(.bottom, 8)
                     }
 
-                    ForEach(otherGoals) { goal in
-                        goalRow(goal: goal, vm: vm)
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 10)
+                    LazyVGrid(columns: goalGridColumns, spacing: 12) {
+                        ForEach(otherGoals) { goal in
+                            goalRow(goal: goal, vm: vm)
+                        }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
                 }
             }
         }
@@ -398,7 +421,7 @@ struct GoalsView: View {
     // MARK: - Goal Row with swipe actions
     // --------------------------------------------------------
     private func goalRow(goal: Goal, vm: GoalViewModel) -> some View {
-        GoalRowView(goal: goal, viewModel: vm)
+        GoalRowView(goal: goal, viewModel: vm, isCompact: true)
             .contextMenu {
                 Button {
                     editingGoal = goal
@@ -429,11 +452,12 @@ struct GoalsView: View {
             }
     }
 
-    private func syncHealthProgressIfNeeded() {
+    private func syncHealthProgressIfNeeded(force: Bool = false) {
         guard let vm = viewModel else { return }
         Task {
             await vm.syncTodaysHealthProgressIfEnabled(
-                isEnabled: isHealthSyncEnabled
+                isEnabled: isHealthSyncEnabled,
+                force: force
             )
         }
     }
@@ -458,19 +482,22 @@ struct GoalsView: View {
             .padding(.horizontal, 16)
 
             // Filter out one-time goals — they don't repeat
-            ForEach(
-                vm.tomorrowsGoals.filter {
-                    $0.repeatType != .none
+            LazyVGrid(columns: goalGridColumns, spacing: 12) {
+                ForEach(
+                    vm.tomorrowsGoals.filter {
+                        $0.repeatType != .none
+                    }
+                ) { goal in
+                    GoalRowView(
+                        goal: goal,
+                        viewModel: vm,
+                        isTomorrowPreview: true,
+                        isCompact: true
+                    )
                 }
-            ) { goal in
-                GoalRowView(
-                    goal: goal,
-                    viewModel: vm,
-                    isTomorrowPreview: true
-                )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 8)
             }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
         }
     }
 
@@ -515,17 +542,20 @@ struct GoalsView: View {
     private var duplicateWarningBanner: some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
+                .font(.caption)
+                .foregroundStyle(.orange.opacity(0.85))
+
             Text("A goal with that name already exists today.")
                 .font(.caption)
                 .fontWeight(.medium)
-                .foregroundStyle(.orange)
+                .foregroundStyle(.orange.opacity(0.9))
+
             Spacer()
         }
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.orange.opacity(0.1))
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.orange.opacity(colorScheme == .dark ? 0.13 : 0.07))
         )
     }
 }

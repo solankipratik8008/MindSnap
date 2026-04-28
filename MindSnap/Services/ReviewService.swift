@@ -75,6 +75,7 @@ final class ReviewService {
         let count = UserDefaults.standard.integer(
             forKey: entriesCountKey
         ) + 1
+      
         UserDefaults.standard.set(count, forKey: entriesCountKey)
 
         // Record first launch date if not set

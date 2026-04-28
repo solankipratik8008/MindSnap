@@ -79,6 +79,7 @@ final class HealthKitService {
             .distanceCycling,
             .distanceSwimming,
             .appleExerciseTime,
+            .activeEnergyBurned,
             .dietaryWater
         ]
 
@@ -87,6 +88,19 @@ final class HealthKitService {
                 HKObjectType.quantityType(forIdentifier: $0)
             }
         )
+    }
+
+    func activeCaloriesBurnedToday() async -> Double? {
+        guard isAvailable else { return nil }
+        do {
+            return try await quantitySumToday(
+                identifier: .activeEnergyBurned,
+                unit: .kilocalorie()
+            )
+        } catch {
+            print("HealthKit calories read failed: \(error)")
+            return nil
+        }
     }
 
     private func quantitySumToday(
@@ -136,6 +150,9 @@ final class HealthKitService {
         displayUnit: String
     )? {
         let normalizedUnit = preferredUnit.lowercased()
+        if isCaloriesUnit(normalizedUnit) {
+            return (.activeEnergyBurned, .kilocalorie(), "cal")
+        }
 
         switch activityType {
         case .walking:
@@ -206,5 +223,11 @@ final class HealthKitService {
             return (identifier, .mile(), "miles")
         }
         return (identifier, .meterUnit(with: .kilo), "km")
+    }
+
+    private func isCaloriesUnit(_ unit: String) -> Bool {
+        unit == "cal" || unit == "cals" ||
+            unit == "calorie" || unit == "calories" ||
+            unit == "kcal"
     }
 }

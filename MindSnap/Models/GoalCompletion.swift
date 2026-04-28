@@ -45,6 +45,12 @@ class GoalCompletion {
     var currentValue: Int = 0
     var currentValueDouble: Double = 0
     var targetValue: Int = 1
+    var latestHealthValue: Double = 0
+    var latestHealthCalories: Double = 0
+    var manualOverrideValue: Double = 0
+    var healthBaselineAtManualEdit: Double = 0
+    var hasManualHealthBaseline: Bool = false
+    var lastHealthSyncAt: Date? = nil
 
     // ---- Points ----
     var pointsEarned: Int = 0
@@ -99,6 +105,12 @@ class GoalCompletion {
         currentValue: Int = 0,
         currentValueDouble: Double? = nil,
         targetValue: Int = 1,
+        latestHealthValue: Double = 0,
+        latestHealthCalories: Double = 0,
+        manualOverrideValue: Double = 0,
+        healthBaselineAtManualEdit: Double = 0,
+        hasManualHealthBaseline: Bool = false,
+        lastHealthSyncAt: Date? = nil,
         pointsEarned: Int = 0,
         isCompleted: Bool = false,
         completionSource: CompletionSource = .manual,
@@ -115,6 +127,12 @@ class GoalCompletion {
         self.currentValue = currentValue
         self.currentValueDouble = currentValueDouble ?? Double(currentValue)
         self.targetValue = targetValue
+        self.latestHealthValue = latestHealthValue
+        self.latestHealthCalories = latestHealthCalories
+        self.manualOverrideValue = manualOverrideValue
+        self.healthBaselineAtManualEdit = healthBaselineAtManualEdit
+        self.hasManualHealthBaseline = hasManualHealthBaseline
+        self.lastHealthSyncAt = lastHealthSyncAt
         self.pointsEarned = pointsEarned
         self.isCompleted = isCompleted
         self.completionSourceRaw = completionSource.rawValue

@@ -21,6 +21,24 @@ struct EntryRowView: View {
 
     let entry: JournalEntry
     @Environment(\.colorScheme) private var colorScheme
+    private var brandPrimary: Color {
+        Color(red: 0.50, green: 0.12, blue: 0.85)
+    }
+
+    private var bannerPrimaryTextColor: Color {
+        colorScheme == .dark ? .white : Color.black.opacity(0.82)
+    }
+
+    private var bannerSecondaryTextColor: Color {
+        colorScheme == .dark ? Color.white.opacity(0.78) : Color.black.opacity(0.55)
+    }
+    private var brandSecondary: Color {
+        Color(red: 0.88, green: 0.12, blue: 0.68)
+    }
+
+    private var brandAccent: Color {
+        Color(red: 0.10, green: 0.78, blue: 0.85)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,27 +54,31 @@ struct EntryRowView: View {
             cardBody
         }
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemBackground))
+            RoundedRectangle(cornerRadius: 18)
+                .fill(
+                    colorScheme == .dark
+                    ? Color(red: 0.15, green: 0.15, blue: 0.17)
+                    : Color.white
+                )
                 .shadow(
-                    color: Color.black.opacity(
-                        colorScheme == .dark ? 0.0 : 0.08
-                    ),
-                    radius: 8,
+                    color: colorScheme == .dark
+                    ? Color.clear
+                    : brandPrimary.opacity(0.055),
+                    radius: 10,
                     x: 0,
-                    y: 3
+                    y: 5
                 )
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 18)
                 .stroke(
                     entry.moodType.color.opacity(
-                        colorScheme == .dark ? 0.4 : 0.15
+                        colorScheme == .dark ? 0.22 : 0.10
                     ),
-                    lineWidth: colorScheme == .dark ? 1.5 : 1
+                    lineWidth: 1
                 )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
     // --------------------------------------------------------
@@ -67,108 +89,102 @@ struct EntryRowView: View {
     // --------------------------------------------------------
     private var moodBanner: some View {
         ZStack {
-            // ---- Gradient background ----
             LinearGradient(
                 colors: [
-                    entry.moodType.color.opacity(
-                        colorScheme == .dark ? 0.7 : 0.85
-                    ),
-                    entry.moodType.color.opacity(
-                        colorScheme == .dark ? 0.4 : 0.55
-                    )
+                    entry.moodType.color.opacity(colorScheme == .dark ? 0.30 : 0.26),
+                    brandAccent.opacity(colorScheme == .dark ? 0.18 : 0.12),
+                    brandPrimary.opacity(colorScheme == .dark ? 0.16 : 0.09)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
 
-            // ---- Decorative circles ----
-            Circle()
-                .fill(Color.white.opacity(0.08))
-                .frame(width: 100, height: 100)
-                .offset(x: 120, y: -20)
+            // Clean premium highlight instead of large background bubbles
+            LinearGradient(
+                colors: [
+                    Color.white.opacity(colorScheme == .dark ? 0.06 : 0.14),
+                    Color.white.opacity(0.02),
+                    Color.clear
+                ],
+                startPoint: .topTrailing,
+                endPoint: .bottomLeading
+            )
 
-            Circle()
-                .fill(Color.white.opacity(0.06))
-                .frame(width: 60, height: 60)
-                .offset(x: -80, y: 30)
-
-            // ---- Content row ----
             HStack(spacing: 12) {
-
-                // ---- Big mood emoji ----
                 Text(entry.moodType.emoji)
-                    .font(.system(size: 36))
+                    .font(.system(size: 23))
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(colorScheme == .dark ? 0.10 : 0.18))
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.16), lineWidth: 1)
+                    )
                     .shadow(
-                        color: .black.opacity(0.15),
-                        radius: 4, x: 0, y: 2
+                        color: .black.opacity(colorScheme == .dark ? 0.10 : 0.06),
+                        radius: 3,
+                        x: 0,
+                        y: 1
                     )
 
-                // ---- Mood name + time label ----
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Feeling \(entry.moodType.displayName)")
                         .font(.subheadline)
                         .fontWeight(.bold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(bannerPrimaryTextColor)
+                        .lineLimit(1)
 
                     Text(timeOfDayLabel)
                         .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(bannerSecondaryTextColor)
+                        .lineLimit(1)
                 }
 
                 Spacer()
 
-                // ---- Date + Pin badge (right side) ----
                 VStack(alignment: .trailing, spacing: 4) {
-
-                    // ---- Pin indicator ----
-                    // NEW: Shows pin icon when entry is pinned
-                    // Rotated 45° matches iOS Notes pin style
                     if entry.isPinned {
                         HStack(spacing: 3) {
                             Image(systemName: "pin.fill")
                                 .font(.caption2)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.white.opacity(0.82))
                                 .rotationEffect(.degrees(45))
+
                             Text("Pinned")
                                 .font(.caption2)
                                 .fontWeight(.semibold)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.white.opacity(0.82))
                         }
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(
                             Capsule()
-                                // Semi-transparent white pill
-                                .fill(Color.white.opacity(0.25))
+                                .fill(Color.white.opacity(0.16))
                         )
                     }
 
-                    // ---- Date ----
                     Text(entry.shortDate)
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(bannerPrimaryTextColor)
 
-                    // ---- Sentiment score ----
                     Text(String(format: "%+.2f", entry.sentimentScore))
                         .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.85))
+                        .foregroundStyle(bannerSecondaryTextColor)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(
                             Capsule()
-                                .fill(Color.white.opacity(0.2))
+                                .fill(Color.white.opacity(colorScheme == .dark ? 0.13 : 0.28))
                         )
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.vertical, 10)
         }
-        // --------------------------------------------------------
-        // Height adapts when pin badge is showing
-        // Slightly taller to accommodate the extra badge
-        // --------------------------------------------------------
-        .frame(height: entry.isPinned ? 88 : 72)
+        .frame(height: entry.isPinned ? 82 : 66)
     }
 
     // --------------------------------------------------------
@@ -176,8 +192,6 @@ struct EntryRowView: View {
     // --------------------------------------------------------
     private var cardBody: some View {
         VStack(alignment: .leading, spacing: 8) {
-
-            // ---- Entry text preview ----
             Text(entry.previewText)
                 .font(.subheadline)
                 .foregroundStyle(.primary)
@@ -185,12 +199,10 @@ struct EntryRowView: View {
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            // ---- Tags row ----
             if !entry.tags.isEmpty {
                 tagsRow
             }
 
-            // ---- Bottom row ----
             HStack {
                 Text(entry.formattedDate)
                     .font(.caption2)
@@ -202,7 +214,8 @@ struct EntryRowView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "tag.fill")
                             .font(.caption2)
-                            .foregroundStyle(entry.moodType.color)
+                            .foregroundStyle(entry.moodType.color.opacity(0.85))
+
                         Text("\(entry.tags.count) tags")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -211,8 +224,12 @@ struct EntryRowView: View {
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color(.systemBackground))
+        .padding(.vertical, 12)
+        .background(
+            colorScheme == .dark
+            ? Color(red: 0.14, green: 0.14, blue: 0.16)
+            : Color.white
+        )
     }
 
     // --------------------------------------------------------
@@ -230,7 +247,11 @@ struct EntryRowView: View {
                         .padding(.vertical, 3)
                         .background(
                             Capsule()
-                                .fill(Color(.systemGray5))
+                                .fill(
+                                    entry.moodType.color.opacity(
+                                        colorScheme == .dark ? 0.13 : 0.08
+                                    )
+                                )
                         )
                 }
             }

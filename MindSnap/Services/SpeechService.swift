@@ -97,6 +97,7 @@ final class SpeechService: NSObject {
     // AVAudioEngine — captures audio from the microphone
     private let audioEngine = AVAudioEngine()
     private var inputTapInstalled = false
+    private var isStartingRecording = false
 
     // --------------------------------------------------------
     // init()
@@ -164,8 +165,12 @@ final class SpeechService: NSObject {
     //   6. Get real-time transcription results
     // --------------------------------------------------------
     func startRecording() async {
+        guard !isRecording && !isStartingRecording else { return }
+        isStartingRecording = true
+        defer { isStartingRecording = false }
+
         // ---- Step 1: Check permissions ----
-        
+
         if !isAvailable {
             let granted = await requestPermission()
             if !granted {
@@ -239,6 +244,7 @@ final class SpeechService: NSObject {
                 // .bestTranscription is the most accurate version
                 let newText = result.bestTranscription.formattedString
                 DispatchQueue.main.async {
+                    guard self.isRecording else { return }
                     self.transcribedText = newText
                 }
                 isFinal = result.isFinal
@@ -300,6 +306,10 @@ final class SpeechService: NSObject {
         cleanupRecognition(cancelTask: false)
     }
 
+    func cancelRecording() {
+        cleanupRecognition(cancelTask: true)
+    }
+
     // --------------------------------------------------------
     // toggleRecording()
     //
@@ -340,7 +350,9 @@ final class SpeechService: NSObject {
             audioEngine.inputNode.removeTap(onBus: 0)
             inputTapInstalled = false
         }
+        audioEngine.reset()
 
+        recognitionRequest?.endAudio()
         if cancelTask {
             recognitionTask?.cancel()
         }
@@ -371,6 +383,7 @@ extension SpeechService: SFSpeechRecognizerDelegate {
         availabilityDidChange available: Bool
     ) {
         DispatchQueue.main.async {
+            guard self.speechRecognizer === speechRecognizer else { return }
             self.isAvailable =
                 available &&
                 speechRecognizer.supportsOnDeviceRecognition

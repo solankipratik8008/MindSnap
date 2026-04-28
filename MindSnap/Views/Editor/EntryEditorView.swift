@@ -481,7 +481,7 @@ struct EntryEditorView: View {
             if err != nil { showingSpeechError = true }
         }
         .onDisappear {
-            speechService.stopRecording()
+            speechService.cancelRecording()
         }
     }
 

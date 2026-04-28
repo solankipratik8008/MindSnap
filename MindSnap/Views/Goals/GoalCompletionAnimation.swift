@@ -120,7 +120,7 @@ struct WaveCompletionView: View {
                 )
             }
         }
-        .onChange(of: isShowing) { _, showing in
+        .onChange(of: isShowing, initial: true) { _, showing in
             if showing {
                 animate = false
                 waveScale = [0.3, 0.3, 0.3]
@@ -214,7 +214,7 @@ struct StarsCompletionView: View {
                 .scaleEffect(animate ? 0.3 : 1.0)
             }
         }
-        .onChange(of: isShowing) { _, showing in
+        .onChange(of: isShowing, initial: true) { _, showing in
             if showing {
                 generateStars()
                 withAnimation(.easeOut(duration: 1.0)) {
@@ -297,7 +297,7 @@ struct SpeedLinesView: View {
                     value: animate
                 )
         }
-        .onChange(of: isShowing) { _, showing in
+        .onChange(of: isShowing, initial: true) { _, showing in
             if showing {
                 animate = false
                 DispatchQueue.main.asyncAfter(
@@ -404,7 +404,7 @@ struct PowerBurstView: View {
                 .opacity(animate ? 0 : 1)
                 .animation(.easeOut(duration: 0.3), value: animate)
         }
-        .onChange(of: isShowing) { _, showing in
+        .onChange(of: isShowing, initial: true) { _, showing in
             if showing {
                 generateParticles()
                 withAnimation(.easeOut(duration: 0.6)) {
@@ -485,7 +485,7 @@ struct CalmPulseView: View {
                     value: isShowing
                 )
         }
-        .onChange(of: isShowing) { _, showing in
+        .onChange(of: isShowing, initial: true) { _, showing in
             if showing {
                 pulseScales = [0.3, 0.3, 0.3, 0.3]
                 pulseOpacities = [0.6, 0.5, 0.4, 0.3]
@@ -545,7 +545,7 @@ struct MoonStarsView: View {
                     )
             }
         }
-        .onChange(of: isShowing) { _, showing in
+        .onChange(of: isShowing, initial: true) { _, showing in
             if showing {
                 generateStars()
                 moonOffset = 20
@@ -636,7 +636,7 @@ struct StepTrailView: View {
                     )
             }
         }
-        .onChange(of: isShowing) { _, showing in
+        .onChange(of: isShowing, initial: true) { _, showing in
             if showing {
                 generateSteps()
                 withAnimation(.easeOut(duration: 0.8)) {
@@ -714,7 +714,7 @@ struct PointsPopupView: View {
             )
             .offset(y: offset)
             .opacity(opacity)
-            .onChange(of: isShowing) { _, showing in
+            .onChange(of: isShowing, initial: true) { _, showing in
                 if showing {
                     offset = 0
                     opacity = 0
@@ -793,7 +793,7 @@ struct ConfettiView: View {
             }
         }
         .allowsHitTesting(false)
-        .onChange(of: isShowing) { _, showing in
+        .onChange(of: isShowing, initial: true) { _, showing in
             if showing {
                 generatePieces()
                 withAnimation(.easeOut(duration: 1.2)) {
@@ -888,7 +888,7 @@ struct GoalCompletionBurst: View {
             }
         }
         .allowsHitTesting(false)
-        .onChange(of: isShowing) { _, showing in
+        .onChange(of: isShowing, initial: true) { _, showing in
             if showing {
                 generateParticles()
                 withAnimation(.easeOut(duration: 0.6)) {

@@ -21,6 +21,7 @@ import SwiftData
 import SwiftUI
 import Foundation
 import UserNotifications
+import WidgetKit
 
 @Observable
 class GoalViewModel {
@@ -40,6 +41,7 @@ class GoalViewModel {
     // ---- Health ----
     var healthyLimitWarning: String? = nil
     var showingHealthWarning: Bool = false
+    var isHealthSyncInProgress = false
 
     // ---- Duplicate ----
     var duplicateGoalName: String? = nil
@@ -59,6 +61,8 @@ class GoalViewModel {
     private var modelContext: ModelContext
     private let notificationService = NotificationService()
     private let healthKitService = HealthKitService()
+    private static var lastAutomaticHealthSyncAt: Date?
+    private static let automaticHealthSyncMinimumInterval: TimeInterval = 10 * 60
 
     private let honestyMessages = [
         "We trust your honesty! 🤝 You know what you accomplished.",
@@ -152,16 +156,23 @@ class GoalViewModel {
 
     func todaysProgressValue(for goal: Goal) -> Double {
         let today = Calendar.current.startOfDay(for: Date())
+
         if let completion = completions.first(where: {
             $0.goalID == goal.id &&
-            Calendar.current.startOfDay(
-                for: $0.completedAt
-            ) == today
+            Calendar.current.startOfDay(for: $0.completedAt) == today
         }) {
             return completion.progressValue
         }
 
-        return goal.currentProgressValue
+        // No completion for today means the goal has not been done today.
+        // Non-Health goals must always start at 0.
+        guard isHealthTracked(goal) else {
+            return 0
+        }
+
+        // Health goals may display model-backed progress only after real Health sync.
+        // Still clamp it so it can never display negative or invalid values.
+        return max(0, min(goal.currentProgressValue, Double(goal.targetValue)))
     }
 
     // ---- Today's completion record ----
@@ -479,6 +490,11 @@ class GoalViewModel {
             sortOrder: goals.count,
             scheduledDate: Date()
         )
+        
+        // New goals must never inherit stale progress.
+        // Today’s progress should be created only by user action or Health sync.
+        goal.currentValue = 0
+        goal.currentValueDouble = 0
 
         modelContext.insert(goal)
 
@@ -812,6 +828,11 @@ class GoalViewModel {
             calendar.startOfDay(for: $0.completedAt) == today
         }) {
             let wasCompleted = existing.isCompleted
+            recordManualHealthBaselineIfNeeded(
+                for: existing,
+                goal: goal,
+                manualValue: value
+            )
             existing.currentValue = Int(value.rounded(.down))
             existing.currentValueDouble = value
             goal.currentValue = Int(value.rounded(.down))
@@ -844,6 +865,8 @@ class GoalViewModel {
                 currentValue: Int(value.rounded(.down)),
                 currentValueDouble: value,
                 targetValue: goal.targetValue,
+                manualOverrideValue: value,
+                hasManualHealthBaseline: isHealthTracked(goal),
                 pointsEarned: isComplete
                     ? goal.pointsPerCompletion : 0,
                 isCompleted: isComplete,
@@ -969,16 +992,40 @@ class GoalViewModel {
     }
 
     func syncTodaysHealthProgressIfEnabled(
-        isEnabled: Bool
+        isEnabled: Bool,
+        force: Bool = false
     ) async {
         guard isEnabled else { return }
         guard healthKitService.isAvailable else { return }
+        let shouldStart = await MainActor.run { () -> Bool in
+            guard !isHealthSyncInProgress else { return false }
+            if !force,
+               let lastSync = Self.lastAutomaticHealthSyncAt,
+               Calendar.current.isDate(lastSync, inSameDayAs: Date()),
+               Date().timeIntervalSince(lastSync) <
+                    Self.automaticHealthSyncMinimumInterval {
+                return false
+            }
+            isHealthSyncInProgress = true
+            Self.lastAutomaticHealthSyncAt = Date()
+            return true
+        }
+        guard shouldStart else { return }
+        defer {
+            Task { @MainActor in
+                self.isHealthSyncInProgress = false
+            }
+        }
+
+        let healthGoals = todaysGoals.filter { $0.goalType == .progress }
+        guard !healthGoals.isEmpty else { return }
 
         _ = await healthKitService.requestAuthorization()
 
         var didChange = false
+        let calories = await healthKitService.activeCaloriesBurnedToday()
 
-        for goal in todaysGoals where goal.goalType == .progress {
+        for goal in healthGoals {
             guard let metric = await healthKitService.metricForToday(
                 activityType: goal.activityType,
                 preferredUnit: goal.unit
@@ -990,7 +1037,11 @@ class GoalViewModel {
             guard value > 0 else { continue }
 
             let changed = await MainActor.run {
-                applyHealthProgress(value, to: goal)
+                applyHealthProgress(
+                    value,
+                    to: goal,
+                    caloriesBurned: calories
+                )
             }
             if changed {
                 didChange = true
@@ -1002,8 +1053,55 @@ class GoalViewModel {
                 saveContext()
                 fetchCompletions()
                 fetchGoals()
+                WidgetCenter.shared.reloadAllTimelines()
             }
         }
+    }
+
+    func resyncWithAppleHealth(for goal: Goal) async -> Bool {
+        guard isHealthTracked(goal) else { return false }
+        guard healthKitService.isAvailable else { return false }
+
+        let shouldStart = await MainActor.run { () -> Bool in
+            guard !isHealthSyncInProgress else { return false }
+            isHealthSyncInProgress = true
+            return true
+        }
+        guard shouldStart else { return false }
+        defer {
+            Task { @MainActor in
+                self.isHealthSyncInProgress = false
+            }
+        }
+
+        _ = await healthKitService.requestAuthorization()
+        let calories = await healthKitService.activeCaloriesBurnedToday()
+        guard let metric = await healthKitService.metricForToday(
+            activityType: goal.activityType,
+            preferredUnit: goal.unit
+        ) else {
+            return false
+        }
+
+        let value = normalizedHealthValue(metric.value, unit: goal.unit)
+        let changed = await MainActor.run {
+            applyPureHealthProgress(
+                value,
+                to: goal,
+                caloriesBurned: calories
+            )
+        }
+
+        if changed {
+            await MainActor.run {
+                saveContext()
+                fetchCompletions()
+                fetchGoals()
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+        }
+
+        return changed
     }
 
     // --------------------------------------------------------
@@ -1133,28 +1231,54 @@ class GoalViewModel {
 
     private func applyHealthProgress(
         _ value: Double,
-        to goal: Goal
+        to goal: Goal,
+        caloriesBurned: Double? = nil
     ) -> Bool {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let clampedValue = max(0, value)
+        let positiveCalories = caloriesBurned.flatMap { value -> Double? in
+            let rounded = value.rounded(.down)
+            return rounded > 0 ? rounded : nil
+        }
 
         if let existing = todaysCompletionRecord(for: goal) {
+            let adjustedValue = adjustedHealthProgress(
+                healthValue: clampedValue,
+                completion: existing
+            )
+            let caloriesChanged = positiveCalories.map {
+                isMeaningfullyDifferent(
+                    existing.latestHealthCalories,
+                    $0,
+                    tolerance: 1
+                )
+            } ?? false
+            let progressChanged = adjustedValue >
+                existing.progressValue + progressTolerance(for: goal)
 
-            // Only update if new value is higher
-            guard clampedValue > existing.progressValue else {
+            // Only update when Health produced new progress or calories.
+            guard progressChanged || caloriesChanged else {
                 return false
             }
 
-            goal.currentValue = Int(clampedValue.rounded(.down))
-            goal.currentValueDouble = clampedValue
+            if progressChanged {
+                goal.currentValue = Int(adjustedValue.rounded(.down))
+                goal.currentValueDouble = adjustedValue
 
-            existing.currentValue = Int(clampedValue.rounded(.down))
-            existing.currentValueDouble = clampedValue
+                existing.currentValue = Int(adjustedValue.rounded(.down))
+                existing.currentValueDouble = adjustedValue
+            }
+
+            existing.latestHealthValue = clampedValue
+            if let positiveCalories {
+                existing.latestHealthCalories = positiveCalories
+            }
+            existing.lastHealthSyncAt = Date()
             existing.completionSourceRaw =
                 CompletionSource.automatic.rawValue
 
-            if clampedValue >= Double(goal.targetValue) &&
+            if adjustedValue >= Double(goal.targetValue) &&
                !existing.isPointsAwarded {
 
                 existing.isCompleted = true
@@ -1182,6 +1306,9 @@ class GoalViewModel {
                 currentValue: Int(clampedValue.rounded(.down)),
                 currentValueDouble: clampedValue,
                 targetValue: goal.targetValue,
+                latestHealthValue: clampedValue,
+                latestHealthCalories: positiveCalories ?? 0,
+                lastHealthSyncAt: Date(),
                 pointsEarned: isComplete
                     ? goal.pointsPerCompletion : 0,
                 isCompleted: isComplete,
@@ -1201,6 +1328,165 @@ class GoalViewModel {
 
             return true
         }
+    }
+
+    private func applyPureHealthProgress(
+        _ value: Double,
+        to goal: Goal,
+        caloriesBurned: Double? = nil
+    ) -> Bool {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let clampedValue = max(0, value)
+        let positiveCalories = caloriesBurned.flatMap { value -> Double? in
+            let rounded = value.rounded(.down)
+            return rounded > 0 ? rounded : nil
+        }
+        let integerValue = Int(clampedValue.rounded(.down))
+
+        if let existing = todaysCompletionRecord(for: goal) {
+            let wasCompleted = existing.isCompleted
+            let caloriesChanged = positiveCalories.map {
+                isMeaningfullyDifferent(
+                    existing.latestHealthCalories,
+                    $0,
+                    tolerance: 1
+                )
+            } ?? false
+            let tolerance = progressTolerance(for: goal)
+
+            guard isMeaningfullyDifferent(
+                    existing.progressValue,
+                    clampedValue,
+                    tolerance: tolerance
+                ) ||
+                    existing.hasManualHealthBaseline ||
+                    isMeaningfullyDifferent(
+                        existing.latestHealthValue,
+                        clampedValue,
+                        tolerance: tolerance
+                    ) ||
+                    caloriesChanged else {
+                return false
+            }
+
+            existing.hasManualHealthBaseline = false
+            existing.manualOverrideValue = 0
+            existing.healthBaselineAtManualEdit = 0
+            existing.latestHealthValue = clampedValue
+            if let positiveCalories {
+                existing.latestHealthCalories = positiveCalories
+            }
+            existing.lastHealthSyncAt = Date()
+            existing.currentValue = integerValue
+            existing.currentValueDouble = clampedValue
+            existing.completionSourceRaw = CompletionSource.automatic.rawValue
+            existing.isCompleted = clampedValue >= Double(goal.targetValue)
+
+            goal.currentValue = integerValue
+            goal.currentValueDouble = clampedValue
+
+            if existing.isCompleted && !wasCompleted && !existing.isPointsAwarded {
+                existing.isPointsAwarded = true
+                existing.pointsEarned = goal.pointsPerCompletion
+                awardPoints(goal.pointsPerCompletion)
+                goal.totalPointsEarned += goal.pointsPerCompletion
+                checkAllGoalsCompleted()
+            }
+
+            return true
+        }
+
+        let completion = GoalCompletion(
+            goalID: goal.id,
+            goalName: goal.name,
+            currentValue: integerValue,
+            currentValueDouble: clampedValue,
+            targetValue: goal.targetValue,
+            latestHealthValue: clampedValue,
+            latestHealthCalories: positiveCalories ?? 0,
+            lastHealthSyncAt: Date(),
+            pointsEarned: clampedValue >= Double(goal.targetValue)
+                ? goal.pointsPerCompletion : 0,
+            isCompleted: clampedValue >= Double(goal.targetValue),
+            completionSource: .automatic,
+            isPointsAwarded: clampedValue >= Double(goal.targetValue),
+            toggleCount: 0,
+            completedAt: today
+        )
+        modelContext.insert(completion)
+        goal.currentValue = integerValue
+        goal.currentValueDouble = clampedValue
+        return true
+    }
+
+    private func recordManualHealthBaselineIfNeeded(
+        for completion: GoalCompletion,
+        goal: Goal,
+        manualValue: Double
+    ) {
+        guard isHealthTracked(goal) else { return }
+
+        let baseline = completion.latestHealthValue > 0
+            ? completion.latestHealthValue
+            : completion.progressValue
+
+        completion.manualOverrideValue = manualValue
+        completion.healthBaselineAtManualEdit = baseline
+        completion.hasManualHealthBaseline = true
+    }
+
+    private func progressTolerance(for goal: Goal) -> Double {
+        let unit = goal.unit.lowercased()
+        if unit.contains("step") || unit == "count" || unit == "times" {
+            return 0.5
+        }
+        if unit == "cal" || unit == "kcal" || unit.contains("calorie") {
+            return 1
+        }
+        return 0.01
+    }
+
+    private func isMeaningfullyDifferent(
+        _ lhs: Double,
+        _ rhs: Double,
+        tolerance: Double
+    ) -> Bool {
+        abs(lhs - rhs) > tolerance
+    }
+
+    private func adjustedHealthProgress(
+        healthValue: Double,
+        completion: GoalCompletion
+    ) -> Double {
+        guard completion.hasManualHealthBaseline else {
+            return healthValue
+        }
+
+        let increaseAfterManualEdit = max(
+            0,
+            healthValue - completion.healthBaselineAtManualEdit
+        )
+        return completion.manualOverrideValue + increaseAfterManualEdit
+    }
+
+    private func isHealthTracked(_ goal: Goal) -> Bool {
+        goal.isHealthKitLinked ||
+            HealthKitService.healthSupportedActivityTypes
+                .contains(goal.activityType)
+    }
+
+    func lastHealthSyncDate(for goal: Goal) -> Date? {
+        todaysCompletionRecord(for: goal)?.lastHealthSyncAt
+    }
+
+    func isUsingManualHealthOverride(for goal: Goal) -> Bool {
+        todaysCompletionRecord(for: goal)?.hasManualHealthBaseline == true
+    }
+
+    func caloriesBurned(for goal: Goal) -> Double {
+        guard isHealthTracked(goal) else { return 0 }
+        return todaysCompletionRecord(for: goal)?.latestHealthCalories ?? 0
     }
 
     private func normalizedHealthValue(_ value: Double, unit: String) -> Double {
