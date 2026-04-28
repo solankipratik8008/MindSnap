@@ -55,7 +55,7 @@ final class ReviewService {
 
     // Replace YOUR_APP_ID after the app is live on the App Store.
     static let appStoreReviewURL =
-        "https://apps.apple.com/app/idYOUR_APP_ID?action=write-review"
+        "https://apps.apple.com/app/id6764239400?action=write-review"
 
     // --------------------------------------------------------
     // trackEntryCreated()
