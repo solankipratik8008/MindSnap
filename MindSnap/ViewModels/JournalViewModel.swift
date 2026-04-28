@@ -47,8 +47,19 @@ class JournalViewModel {
     // --------------------------------------------------------
     // MARK: - Computed Properties
     // --------------------------------------------------------
+    private func sortEntriesPinnedFirst(_ entries: [JournalEntry]) -> [JournalEntry] {
+        entries.sorted { first, second in
+            if first.isPinned != second.isPinned {
+                return first.isPinned && !second.isPinned
+            }
+
+            return first.date > second.date
+        }
+    }
     var displayedEntries: [JournalEntry] {
-        isSearchMode ? searchResults : entries
+        isSearchMode
+            ? sortEntriesPinnedFirst(searchResults)
+            : sortEntriesPinnedFirst(entries)
     }
 
     var filteredEntries: [JournalEntry] { displayedEntries }
@@ -107,12 +118,14 @@ class JournalViewModel {
                 try? modelContext.fetchCount(countDescriptor)
             ) ?? 0
 
-            var descriptor = FetchDescriptor<JournalEntry>()
+            var descriptor = FetchDescriptor<JournalEntry>(
+                sortBy: [SortDescriptor(\.date, order: .reverse)]
+            )
             descriptor.fetchLimit = pageSize
             descriptor.fetchOffset = 0
 
             let fetched = try modelContext.fetch(descriptor)
-            entries = fetched.sorted { $0.date > $1.date }
+            entries = sortEntriesPinnedFirst(fetched)
             currentOffset = entries.count
             hasMoreEntries = entries.count == pageSize
 
@@ -143,13 +156,16 @@ class JournalViewModel {
         isLoadingMore = true
 
         do {
-            var descriptor = FetchDescriptor<JournalEntry>()
+            var descriptor = FetchDescriptor<JournalEntry>(
+                sortBy: [SortDescriptor(\.date, order: .reverse)]
+            )
             descriptor.fetchLimit = pageSize
             descriptor.fetchOffset = currentOffset
 
             let newEntries = try modelContext.fetch(descriptor)
-            let sorted = newEntries.sorted { $0.date > $1.date }
+            let sorted = sortEntriesPinnedFirst(newEntries)
             entries.append(contentsOf: sorted)
+            entries = sortEntriesPinnedFirst(entries)
             currentOffset += newEntries.count
             hasMoreEntries = newEntries.count == pageSize
 
@@ -179,15 +195,16 @@ class JournalViewModel {
             let all = try modelContext.fetch(descriptor)
             let query = searchText.lowercased()
 
-            searchResults = all.filter { entry in
+            let filtered = all.filter { entry in
                 entry.text.lowercased().contains(query) ||
                 entry.tags.contains {
                     $0.lowercased().contains(query)
                 }
             }
-            .sorted { $0.date > $1.date }
-            .prefix(100)
-            .map { $0 }
+
+            searchResults = sortEntriesPinnedFirst(filtered)
+                .prefix(100)
+                .map { $0 }
 
         } catch {
             print("searchEntries error: \(error)")
@@ -233,10 +250,9 @@ class JournalViewModel {
         haptic.notificationOccurred(.success)
 
         entries.insert(newEntry, at: 0)
+        entries = sortEntriesPinnedFirst(entries)
         currentOffset += 1
         totalEntryCount += 1
-        ReviewService.shared.trackEntryCreated()
-        ReviewService.shared.trackStreakMilestone(streak: streakCount)
     }
 
     func updateEntry(
@@ -269,6 +285,18 @@ class JournalViewModel {
 
         let haptic = UINotificationFeedbackGenerator()
         haptic.notificationOccurred(.success)
+    }
+    
+    func togglePin(_ entry: JournalEntry) {
+        entry.isPinned.toggle()
+
+        entries = sortEntriesPinnedFirst(entries)
+        searchResults = sortEntriesPinnedFirst(searchResults)
+
+        saveContext()
+
+        let haptic = UIImpactFeedbackGenerator(style: .light)
+        haptic.impactOccurred()
     }
 
     func deleteEntry(_ entry: JournalEntry) {

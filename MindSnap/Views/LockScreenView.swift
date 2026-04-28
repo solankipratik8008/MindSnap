@@ -223,7 +223,7 @@ struct LockScreenView: View {
         HStack(spacing: 6) {
             Image(systemName: "lock.shield.fill")
                 .font(.caption)
-            Text("All data stored privately on your device")
+            Text("Private on your device and iCloud")
                 .font(.caption)
         }
         .foregroundStyle(.secondary)

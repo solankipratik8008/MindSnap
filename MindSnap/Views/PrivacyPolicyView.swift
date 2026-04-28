@@ -73,7 +73,7 @@ struct PrivacyPolicyView: View {
                 fullPolicyButton
 
                 // ---- Last Updated ----
-                Text("Last updated: April 2026")
+                Text("Last updated: April 26, 2026")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -296,10 +296,10 @@ struct PrivacyPolicyView: View {
             AnyView(
                 VStack(alignment: .leading, spacing: 10) {
                     policyText("You stay in control of your data and permissions:")
-	                    rightsRow(
-	                        icon: "trash.fill",
-	                        text: "Delete all data anytime via Settings → Clear All Journal Data"
-	                    )
+                    rightsRow(
+                        icon: "trash.fill",
+                        text: "Delete journal entries via Settings → Clear All Journal Data, or remove all MindSnap data via Settings → Delete Account & All Data"
+                    )
                     rightsRow(
                         icon: "heart.text.square.fill",
                         text: "Turn Apple Health sync on or off anytime in MindSnap Settings and iOS Settings"

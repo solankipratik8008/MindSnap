@@ -149,19 +149,38 @@ struct EntryRowView: View {
                         HStack(spacing: 3) {
                             Image(systemName: "pin.fill")
                                 .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.82))
+                                .foregroundStyle(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.88)
+                                        : brandSecondary
+                                )
                                 .rotationEffect(.degrees(45))
 
                             Text("Pinned")
                                 .font(.caption2)
                                 .fontWeight(.semibold)
-                                .foregroundStyle(.white.opacity(0.82))
+                                .foregroundStyle(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.88)
+                                        : brandSecondary
+                                )
                         }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
                         .background(
                             Capsule()
-                                .fill(Color.white.opacity(0.16))
+                                .fill(
+                                    colorScheme == .dark
+                                        ? Color.white.opacity(0.14)
+                                        : Color.white.opacity(0.72)
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(
+                                            brandSecondary.opacity(colorScheme == .dark ? 0.18 : 0.22),
+                                            lineWidth: 1
+                                        )
+                                )
                         )
                     }
 

@@ -108,6 +108,7 @@ struct MindSnapWidgetEntry: TimelineEntry {
     let completedGoalsToday: Int
     let totalGoalsToday: Int
     let widgetGoals: [WidgetGoalSnapshot]
+    let includeJournalShortcut: Bool
 
     // --------------------------------------------------------
     // placeholder — Static placeholder for widget gallery
@@ -140,7 +141,8 @@ struct MindSnapWidgetEntry: TimelineEntry {
                 unit: "steps",
                 calories: 0
             )
-        ]
+        ],
+        includeJournalShortcut: true
     )
 }
 

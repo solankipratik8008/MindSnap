@@ -95,8 +95,8 @@ struct WeeklyProgressView: View {
             LinearGradient(
                 colors: [
                     brandPrimary.opacity(colorScheme == .dark ? 0.95 : 0.92),
-                    brandSecondary.opacity(colorScheme == .dark ? 0.86 : 0.84),
-                    brandAccent.opacity(colorScheme == .dark ? 0.30 : 0.22)
+                    brandSecondary.opacity(colorScheme == .dark ? 0.84 : 0.78),
+                    brandAccent.opacity(colorScheme == .dark ? 0.24 : 0.12)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -105,7 +105,7 @@ struct WeeklyProgressView: View {
             // Minimal premium shine instead of large bubbles
             LinearGradient(
                 colors: [
-                    Color.white.opacity(colorScheme == .dark ? 0.10 : 0.18),
+                    Color.white.opacity(colorScheme == .dark ? 0.08 : 0.10),
                     Color.white.opacity(0.02),
                     Color.clear
                 ],
@@ -143,7 +143,7 @@ struct WeeklyProgressView: View {
 
                             Text("Current Level")
                                 .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.78))
+                                .foregroundStyle(.white.opacity(0.92))
                         }
                     }
 
@@ -164,7 +164,7 @@ struct WeeklyProgressView: View {
 
                         Text("day streak")
                             .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.74))
+                            .foregroundStyle(.white.opacity(0.90))
                     }
                     .padding(.horizontal, 11)
                     .padding(.vertical, 7)
@@ -192,7 +192,7 @@ struct WeeklyProgressView: View {
 
                         Text("Total Points")
                             .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.74))
+                            .foregroundStyle(.white.opacity(0.90))
                     }
                 }
 
@@ -239,7 +239,7 @@ struct WeeklyProgressView: View {
                     HStack {
                         Text(viewModel.currentLevel.message)
                             .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.82))
+                            .foregroundStyle(.white.opacity(0.94))
                             .lineLimit(1)
 
                         Spacer()
@@ -247,17 +247,39 @@ struct WeeklyProgressView: View {
                         if viewModel.currentLevel != .champion {
                             Text("\(UserPoints.pointsToNextLevel) pts to next level")
                                 .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.76))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.white)
                                 .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.black.opacity(colorScheme == .dark ? 0.18 : 0.16))
+                                )
+                                .shadow(color: .black.opacity(0.18), radius: 1, x: 0, y: 1)
                         } else {
                             Text("Max Level! 🏆")
                                 .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.82))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.black.opacity(colorScheme == .dark ? 0.18 : 0.16))
+                                )
                         }
                     }
                 }
             }
             .padding(16)
+            .shadow(
+                color: Color.black.opacity(colorScheme == .dark ? 0.24 : 0.16),
+                radius: 1,
+                x: 0,
+                y: 1
+            )
         }
         .frame(height: 140)
         .clipShape(
@@ -497,16 +519,22 @@ struct WeeklyProgressView: View {
                             Text(goal.emoji)
                                 .font(.caption)
                             Text(
-                                "\(progress)/\(goal.targetValue)" +
-                                " \(goal.unit)"
+                                "\(progress.formatted(.number.precision(.fractionLength(0...1))))/\(goal.targetValue) \(goal.unit)"
                             )
                             .font(.caption2)
+                            .fontWeight(.medium)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                             Spacer()
                             Text("~\(partial) pts at day end")
                                 .font(.caption2)
-                                .fontWeight(.medium)
-                                .foregroundStyle(.orange)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(
+                                    colorScheme == .dark
+                                        ? Color.orange.opacity(0.95)
+                                        : Color(red: 0.82, green: 0.33, blue: 0.02)
+                                )
                         }
                     }
                 }
@@ -514,10 +542,19 @@ struct WeeklyProgressView: View {
         }
         .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.orange.opacity(
-                    colorScheme == .dark ? 0.12 : 0.07
-                ))
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    colorScheme == .dark
+                        ? Color.orange.opacity(0.10)
+                        : Color(red: 1.0, green: 0.96, blue: 0.90)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(
+                            Color.orange.opacity(colorScheme == .dark ? 0.12 : 0.16),
+                            lineWidth: 1
+                        )
+                )
         )
     }
 

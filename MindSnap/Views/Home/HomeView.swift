@@ -586,12 +586,23 @@ struct HomeView: View {
                 }
                 .contextMenu {
                     Button {
+                        viewModel.togglePin(entry)
+                    } label: {
+                        Label(
+                            entry.isPinned ? "Unpin Entry" : "Pin Entry",
+                            systemImage: entry.isPinned ? "pin.slash" : "pin"
+                        )
+                    }
+
+                    Button {
                         selectedEntry = entry
                         showingEditor = true
                     } label: {
                         Label("Edit", systemImage: "pencil")
                     }
+
                     Divider()
+
                     Button(role: .destructive) {
                         entryToDelete = entry
                         showingDeleteAlert = true
@@ -606,6 +617,7 @@ struct HomeView: View {
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
+
                     Button {
                         selectedEntry = entry
                         showingEditor = true
@@ -613,6 +625,16 @@ struct HomeView: View {
                         Label("Edit", systemImage: "pencil")
                     }
                     .tint(.blue)
+
+                    Button {
+                        viewModel.togglePin(entry)
+                    } label: {
+                        Label(
+                            entry.isPinned ? "Unpin" : "Pin",
+                            systemImage: entry.isPinned ? "pin.slash" : "pin"
+                        )
+                    }
+                    .tint(.orange)
                 }
         }
         

@@ -540,7 +540,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = MindSnap/MindSnap.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = 4ZPYD95GJT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -548,15 +548,15 @@
 				INFOPLIST_KEY_CFBundleDisplayName = MindSnap;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "MindSnap uses Face ID to keep your journal private and secure";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "MindSnap reads selected Apple Health activity totals to update your goals automatically.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "MindSnap does not write health data.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "MindSnap uses your microphone to record voice journal entries";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "MindSnap uses speech recognition to transcribe your journal entries";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "MindSnap reads selected Apple Health activity data, such as steps, distance, exercise minutes, active energy, and water, to update your goal progress. MindSnap does not sell or share your Health data.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "MindSnap does not write data to Apple Health. Health access is used only to read selected activity data for goal progress.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "MindSnap uses the microphone only when you choose voice journaling, to capture your spoken words for a journal entry.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "MindSnap uses speech recognition only when you choose voice journaling, to convert your spoken words into journal text.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -566,6 +566,10 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.pratik.MindSnap;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -582,7 +586,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = MindSnap/MindSnap.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = 4ZPYD95GJT;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -590,15 +594,15 @@
 				INFOPLIST_KEY_CFBundleDisplayName = MindSnap;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "MindSnap uses Face ID to keep your journal private and secure";
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "MindSnap reads selected Apple Health activity totals to update your goals automatically.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "MindSnap does not write health data.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "MindSnap uses your microphone to record voice journal entries";
-				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "MindSnap uses speech recognition to transcribe your journal entries";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "MindSnap reads selected Apple Health activity data, such as steps, distance, exercise minutes, active energy, and water, to update your goal progress. MindSnap does not sell or share your Health data.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "MindSnap does not write data to Apple Health. Health access is used only to read selected activity data for goal progress.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "MindSnap uses the microphone only when you choose voice journaling, to capture your spoken words for a journal entry.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "MindSnap uses speech recognition only when you choose voice journaling, to convert your spoken words into journal text.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -608,6 +612,10 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.pratik.MindSnap;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -704,12 +712,13 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = MindSnapWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = 4ZPYD95GJT;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MindSnapWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MindSnapWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -735,12 +744,13 @@
 				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
 				CODE_SIGN_ENTITLEMENTS = MindSnapWidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = 4ZPYD95GJT;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = MindSnapWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = MindSnapWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

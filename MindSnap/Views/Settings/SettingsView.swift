@@ -84,6 +84,12 @@ struct SettingsView: View {
         store: UserDefaults(suiteName: "group.com.pratik.MindSnap")
     )
     private var widgetGoalIDsRaw = ""
+    
+    @AppStorage(
+        "widgetIncludeJournalShortcut",
+        store: UserDefaults(suiteName: "group.com.pratik.MindSnap")
+    )
+    private var widgetIncludeJournalShortcut = true
 
     // ---- Services ----
     @Environment(\.modelContext) private var modelContext
@@ -249,6 +255,34 @@ struct SettingsView: View {
 
     private var widgetGoalsSection: some View {
         Section {
+            Toggle(isOn: Binding(
+                get: { widgetIncludeJournalShortcut },
+                set: { newValue in
+                    widgetIncludeJournalShortcut = newValue
+                    WidgetCenter.shared.reloadAllTimelines()
+                }
+            )) {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Include Journal Shortcut")
+                        Text("Show a private Write Journal action in widgets")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 7)
+                            .fill(Color.purple)
+                            .frame(width: 28, height: 28)
+
+                        Image(systemName: "square.and.pencil")
+                            .foregroundStyle(.white)
+                            .font(.system(size: 14))
+                    }
+                }
+            }
+            .tint(.purple)
+
             if activeWidgetCandidateGoals.isEmpty {
                 Text("Create an active goal to customize your widgets.")
                     .font(.caption)
@@ -267,6 +301,7 @@ struct SettingsView: View {
                                 Text(goal.name)
                                     .foregroundStyle(.primary)
                                     .lineLimit(1)
+
                                 Text("\(goal.category.rawValue) • \(goal.goalType.rawValue)")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -292,9 +327,9 @@ struct SettingsView: View {
                 }
             }
         } header: {
-            Text("Widget Goals")
+            Text("Widget")
         } footer: {
-            Text("Choose up to 4 active goals for widgets. Small and Lock Screen widgets show only what fits. Widgets are visible on your Home Screen and Lock Screen, so MindSnap shows short goal progress only, not private journal entries or mood details.")
+            Text("Choose up to 4 active goals for widgets. You can also include a private Write Journal shortcut. Widgets never show journal text or mood details.")
         }
     }
 

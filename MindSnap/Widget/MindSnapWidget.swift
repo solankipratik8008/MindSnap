@@ -201,7 +201,8 @@ struct MindSnapWidgetProvider: @MainActor TimelineProvider {
                 goalUnit: primaryGoal?.unit ?? goalSummary.unit,
                 completedGoalsToday: goalSummary.completedCount,
                 totalGoalsToday: goalSummary.totalCount,
-                widgetGoals: widgetGoals
+                widgetGoals: widgetGoals,
+                includeJournalShortcut: shouldIncludeJournalShortcut()
             )
 
         } catch {
@@ -303,9 +304,22 @@ struct MindSnapWidgetProvider: @MainActor TimelineProvider {
         let fallbackGoals = todaysGoals.filter { goal in
             !selectedIDs.contains(goal.id)
         }
-        let orderedGoals = selectedGoals.isEmpty
-            ? Array(todaysGoals.prefix(4))
-            : Array((selectedGoals + fallbackGoals).prefix(4))
+        let orderedGoals: [Goal]
+
+        if selectedGoals.isEmpty {
+            orderedGoals = Array(
+                todaysGoals
+                    .sorted { first, second in
+                        if first.priority != second.priority {
+                            return priorityRank(first.priority) < priorityRank(second.priority)
+                        }
+                        return first.createdAt > second.createdAt
+                    }
+                    .prefix(1)
+            )
+        } else {
+            orderedGoals = Array((selectedGoals + fallbackGoals).prefix(4))
+        }
 
         return orderedGoals.map { goal in
             let completion = todaysCompletions.first {
@@ -334,6 +348,11 @@ struct MindSnapWidgetProvider: @MainActor TimelineProvider {
             .compactMap { UUID(uuidString: String($0)) }
     }
 
+    private func shouldIncludeJournalShortcut() -> Bool {
+        UserDefaults(suiteName: "group.com.pratik.MindSnap")?
+            .object(forKey: "widgetIncludeJournalShortcut") as? Bool ?? true
+    }
+    
     private func shouldShowCalories(for goal: Goal) -> Bool {
         switch goal.activityType {
         case .walking, .running, .cycling, .swimming, .gym, .yoga:
@@ -394,7 +413,6 @@ struct MindSnapWidgetProvider: @MainActor TimelineProvider {
 // ============================================================
 struct MindSnapSmallWidgetView: View {
 
-    // The data entry to display
     let entry: MindSnapWidgetEntry
 
     var body: some View {
@@ -403,70 +421,50 @@ struct MindSnapSmallWidgetView: View {
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.purple.opacity(0.10),
-                            Color(.systemBackground).opacity(0.92)
+                            Color(red: 0.50, green: 0.12, blue: 0.85).opacity(0.92),
+                            Color(red: 0.88, green: 0.12, blue: 0.68).opacity(0.78)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
 
-            VStack(spacing: 7) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("MindSnap")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.9))
+
                     Spacer()
+
                     Text("🔥 \(entry.streakCount)")
                         .font(.caption2)
                         .fontWeight(.bold)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(.white.opacity(0.95))
+                }
+
+                Spacer()
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 28, weight: .semibold))
+                        .foregroundStyle(.white)
+
+                    Text("Write Journal")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.white)
                         .lineLimit(1)
-                }
-                .frame(height: 14)
 
-                ZStack {
-                    Circle()
-                        .fill(Color(.systemBackground).opacity(0.90))
-                        .frame(width: 44, height: 44)
-                    if let goal = entry.widgetGoals.first {
-                        Text(goal.emoji)
-                            .font(.system(size: 20))
-                    } else {
-                        Image(systemName: "book.closed.fill")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.purple)
-                    }
+                    Text("MindSnap")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.white.opacity(0.82))
                 }
 
-                Text(entry.widgetGoals.first?.name ?? "Journal")
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                HStack(spacing: 4) {
-                    Image(systemName: "target")
-                        .font(.system(size: 9, weight: .semibold))
-                    Text(
-                        entry.widgetGoals.first.map {
-                            "\(Int($0.progressRatio * 100))%"
-                        } ??
-                        (entry.goalTarget > 0
-                            ? "\(Int(entry.goalProgressRatio * 100))%"
-                            : "\(entry.completedGoalsToday) goals"
-                        )
-                    )
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                .frame(height: 12)
+                Spacer(minLength: 0)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 9)
+            .padding(14)
         }
         .widgetURL(URL(string: "mindsnap://journal"))
     }
@@ -482,95 +480,211 @@ struct MindSnapMediumWidgetView: View {
 
     let entry: MindSnapWidgetEntry
 
+    private var visibleGoals: [WidgetGoalSnapshot] {
+        Array(entry.widgetGoals.prefix(4))
+    }
+
     var body: some View {
         ZStack {
             ContainerRelativeShape()
                 .fill(
                     LinearGradient(
                         colors: [
-                            Color.purple.opacity(0.14),
-                            Color.blue.opacity(0.08)
+                            Color(red: 0.47, green: 0.10, blue: 0.84).opacity(0.96),
+                            Color(red: 0.86, green: 0.12, blue: 0.68).opacity(0.84),
+                            Color(red: 0.13, green: 0.14, blue: 0.22).opacity(0.70)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
 
-            HStack(spacing: 14) {
-                VStack(spacing: 8) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 18)
-                            .fill(Color.white.opacity(0.82))
-                            .frame(width: 64, height: 64)
-                        Image(systemName: "target")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundStyle(.purple)
-                    }
+            VStack(alignment: .leading, spacing: 8) {
+                header
 
-                    Text("\(Int(entry.goalProgressRatio * 100))%")
-                        .font(.caption)
-                        .fontWeight(.bold)
-                        .foregroundStyle(.primary)
-
-                    Text("Goals")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                if visibleGoals.isEmpty {
+                    emptyWidgetState
+                } else {
+                    goalGrid
                 }
-                .frame(maxHeight: .infinity)
 
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("Goals")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
-
-                    Text(entry.widgetGoals.first?.name ?? entry.goalName ?? "Today")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .lineLimit(1)
-
-                    if !entry.widgetGoals.isEmpty {
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(entry.widgetGoals.prefix(2), id: \.id) { goal in
-                                HStack(spacing: 6) {
-                                    Text(goal.emoji)
-                                    Text(goal.name)
-                                        .lineLimit(1)
-                                    Spacer(minLength: 4)
-                                    Text("\(Int(goal.progressRatio * 100))%")
-                                        .monospacedDigit()
-                                    if goal.calories > 0 {
-                                        Text("🔥 \(Int(goal.calories))")
-                                            .foregroundStyle(.orange)
-                                    }
-                                }
-                                .font(.caption2)
-                                .foregroundStyle(.primary)
-                            }
-                        }
-                    } else {
-                        Text(entry.goalTarget > 0 && !entry.goalUnit.isEmpty
-                             ? "\(entry.formattedGoalProgress) / \(entry.formattedGoalTarget) \(entry.goalUnit)"
-                             : "\(entry.completedGoalsToday)/\(max(entry.totalGoalsToday, 1)) complete")
-                            .font(.caption)
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                    }
-
-                    ProgressView(value: entry.goalProgressRatio)
-                        .tint(.purple)
-
-                    Text("🔥 \(entry.streakCount) streak")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-
-                    Spacer()
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                Spacer(minLength: 0)
             }
-            .padding(14)
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+            .padding(.bottom, 10)
         }
         .widgetURL(URL(string: "mindsnap://goals"))
+    }
+
+    private var header: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 11, weight: .bold))
+
+            Text("MindSnap")
+                .font(.caption)
+                .fontWeight(.bold)
+                .lineLimit(1)
+
+            Spacer(minLength: 6)
+
+            if entry.includeJournalShortcut {
+                Link(destination: URL(string: "mindsnap://journal")!) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "square.and.pencil")
+                            .font(.system(size: 9, weight: .bold))
+
+                        Text("Journal")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(0.16))
+                    )
+                }
+            }
+
+            Text("\(entry.completedGoalsToday)/\(max(entry.totalGoalsToday, 1)) today")
+                .font(.system(size: 10, weight: .bold))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule()
+                        .fill(Color.white.opacity(0.16))
+                )
+        }
+        .foregroundStyle(.white)
+    }
+
+    private var goalGrid: some View {
+        LazyVGrid(
+            columns: [
+                GridItem(.flexible(), spacing: 7),
+                GridItem(.flexible(), spacing: 7)
+            ],
+            spacing: 7
+        ) {
+            ForEach(visibleGoals, id: \.id) { goal in
+                compactGoalTile(goal)
+            }
+        }
+    }
+
+    private func compactGoalTile(_ goal: WidgetGoalSnapshot) -> some View {
+        let isDone = goal.progressRatio >= 1
+
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 5) {
+                Image(systemName: isDone ? "checkmark.circle.fill" : "target")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.95))
+                    .frame(width: 14)
+
+                Text(goal.name)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+
+                Spacer(minLength: 2)
+
+                Text(isDone ? "Done" : "\(Int(goal.progressRatio * 100))%")
+                    .font(.system(size: 10, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+            }
+
+            ProgressView(value: goal.progressRatio)
+                .tint(.white)
+                .scaleEffect(x: 1, y: 0.55, anchor: .center)
+
+            Text(goalProgressText(goal))
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.white.opacity(0.78))
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, minHeight: 49, maxHeight: 51, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.white.opacity(0.13))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.11), lineWidth: 1)
+                )
+        )
+    }
+
+    private var emptyWidgetState: some View {
+        HStack(spacing: 10) {
+            Image(systemName: entry.includeJournalShortcut ? "square.and.pencil" : "target")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(.white)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.includeJournalShortcut ? "Write Journal" : "No goals selected")
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(.white)
+
+                Text(entry.includeJournalShortcut ? "Capture a moment" : "Choose goals in Settings")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.78))
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.white.opacity(0.13))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(0.11), lineWidth: 1)
+                )
+        )
+    }
+
+    private func goalProgressText(_ goal: WidgetGoalSnapshot) -> String {
+        if goal.target <= 0 {
+            return "Progress"
+        }
+
+        let progress = formatGoalValue(goal.progress, unit: goal.unit)
+        let target = formatGoalValue(Double(goal.target), unit: goal.unit)
+
+        if goal.unit.isEmpty {
+            return "\(progress) / \(target)"
+        }
+
+        return "\(progress) / \(target) \(goal.unit)"
+    }
+
+    private func formatGoalValue(_ value: Double, unit: String) -> String {
+        let normalized = unit.lowercased()
+
+        if normalized == "km" ||
+            normalized == "miles" ||
+            normalized == "mi" ||
+            normalized == "l" {
+            if abs(value) > 0 && abs(value) < 1 {
+                return value.formatted(.number.precision(.fractionLength(1...2)))
+            }
+
+            return value.formatted(.number.precision(.fractionLength(0...1)))
+        }
+
+        return "\(Int(value.rounded(.down)))"
     }
 }
 
@@ -583,23 +697,12 @@ struct MindSnapAccessoryCircularView: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.primary.opacity(0.18), lineWidth: 6)
-            Circle()
-                .trim(from: 0, to: max(0.08, min(entry.goalProgressRatio, 1)))
-                .stroke(
-                    Color.purple,
-                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-            VStack(spacing: 1) {
-                Image(systemName: "target")
-                    .font(.caption)
-                Text("\(Int(entry.goalProgressRatio * 100))")
-                    .font(.system(size: 10, weight: .bold))
-            }
+                .stroke(Color.primary.opacity(0.18), lineWidth: 5)
+
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: 16, weight: .semibold))
         }
-        .padding(2)
-        .widgetURL(URL(string: "mindsnap://goals"))
+        .widgetURL(URL(string: "mindsnap://journal"))
     }
 }
 
@@ -608,24 +711,25 @@ struct MindSnapAccessoryRectangularView: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "target")
+            Image(systemName: "square.and.pencil")
                 .font(.caption)
                 .foregroundStyle(.purple)
+
             VStack(alignment: .leading, spacing: 1) {
-                Text("Goals")
+                Text("MindSnap")
                     .font(.caption)
                     .fontWeight(.semibold)
-                Text(
-                    entry.goalTarget > 0
-                        ? "\(Int(entry.goalProgressRatio * 100))% complete"
-                        : "🔥 \(entry.streakCount)"
-                )
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+
+                Text(entry.includeJournalShortcut
+                     ? "Write Journal"
+                     : "\(entry.completedGoalsToday)/\(max(entry.totalGoalsToday, 1)) goals")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
+
             Spacer(minLength: 0)
         }
-        .widgetURL(URL(string: "mindsnap://goals"))
+        .widgetURL(URL(string: "mindsnap://journal"))
     }
 }
 
@@ -633,8 +737,10 @@ struct MindSnapAccessoryInlineView: View {
     let entry: MindSnapWidgetEntry
 
     var body: some View {
-        Text(entry.goalTarget > 0 ? "Goals \(Int(entry.goalProgressRatio * 100))%" : "🔥 \(entry.streakCount)")
-            .widgetURL(URL(string: "mindsnap://goals"))
+        Text(entry.includeJournalShortcut
+             ? "MindSnap · Write Journal"
+             : "MindSnap · \(entry.completedGoalsToday)/\(max(entry.totalGoalsToday, 1)) goals")
+            .widgetURL(URL(string: "mindsnap://journal"))
     }
 }
 
@@ -676,7 +782,16 @@ struct MindSnapWidget: Widget {
         .contentMarginsDisabled()
     }
 }
-
+private func priorityRank(_ priority: GoalPriority) -> Int {
+    switch priority {
+    case .high:
+        return 0
+    case .medium:
+        return 1
+    case .low:
+        return 2
+    }
+}
 // ============================================================
 // MARK: - Widget Entry View (Router)
 //
@@ -750,8 +865,17 @@ struct MindSnapWidgetEntryView: View {
             completedGoalsToday: 1,
             totalGoalsToday: 4,
             widgetGoals: [
-                WidgetGoalSnapshot(id: UUID(), name: "Walk", emoji: "🚶", progress: 4200, target: 10000, unit: "steps", calories: 120)
-            ]
+                WidgetGoalSnapshot(
+                    id: UUID(),
+                    name: "Walk",
+                    emoji: "🚶",
+                    progress: 4200,
+                    target: 10000,
+                    unit: "steps",
+                    calories: 120
+                )
+            ],
+            includeJournalShortcut: true
         )
     }
     
@@ -759,22 +883,30 @@ struct MindSnapWidgetEntryView: View {
         MindSnapWidget()
     } timeline: {
         MindSnapWidgetEntry.placeholder
-        MindSnapWidgetEntry(    
+        MindSnapWidgetEntry(
             date: Date(),
             todaysMood: nil,
-            entryCount: 1,
-            streakCount: 12,
+            entryCount: 2,
+            streakCount: 5,
             lastEntryPreview: nil,
-            goalName: "Morning Run",
-            goalProgress: 3.2,
-            goalTarget: 5,
-            goalUnit: "km",
-            completedGoalsToday: 2,
-            totalGoalsToday: 5,
+            goalName: "Walk",
+            goalProgress: 4200,
+            goalTarget: 10000,
+            goalUnit: "steps",
+            completedGoalsToday: 1,
+            totalGoalsToday: 4,
             widgetGoals: [
-                WidgetGoalSnapshot(id: UUID(), name: "Run", emoji: "🏃", progress: 3.2, target: 5, unit: "km", calories: 220),
-                WidgetGoalSnapshot(id: UUID(), name: "Walk", emoji: "🚶", progress: 4200, target: 10000, unit: "steps", calories: 120)
-            ]
+                WidgetGoalSnapshot(
+                    id: UUID(),
+                    name: "Walk",
+                    emoji: "🚶",
+                    progress: 4200,
+                    target: 10000,
+                    unit: "steps",
+                    calories: 120
+                )
+            ],
+            includeJournalShortcut: true
         )
     }
 
@@ -784,18 +916,27 @@ struct MindSnapWidgetEntryView: View {
         MindSnapWidgetEntry(
             date: Date(),
             todaysMood: nil,
-            entryCount: 1,
-            streakCount: 2,
+            entryCount: 2,
+            streakCount: 5,
             lastEntryPreview: nil,
             goalName: "Walk",
-            goalProgress: 3900,
+            goalProgress: 4200,
             goalTarget: 10000,
             goalUnit: "steps",
             completedGoalsToday: 1,
-            totalGoalsToday: 3,
+            totalGoalsToday: 4,
             widgetGoals: [
-                WidgetGoalSnapshot(id: UUID(), name: "Walk", emoji: "🚶", progress: 3900, target: 10000, unit: "steps", calories: 0)
-            ]
+                WidgetGoalSnapshot(
+                    id: UUID(),
+                    name: "Walk",
+                    emoji: "🚶",
+                    progress: 4200,
+                    target: 10000,
+                    unit: "steps",
+                    calories: 120
+                )
+            ],
+            includeJournalShortcut: true
         )
     }
 
@@ -805,18 +946,27 @@ struct MindSnapWidgetEntryView: View {
         MindSnapWidgetEntry(
             date: Date(),
             todaysMood: nil,
-            entryCount: 1,
-            streakCount: 2,
+            entryCount: 2,
+            streakCount: 5,
             lastEntryPreview: nil,
-            goalName: "Goals",
-            goalProgress: 3900,
+            goalName: "Walk",
+            goalProgress: 4200,
             goalTarget: 10000,
             goalUnit: "steps",
             completedGoalsToday: 1,
-            totalGoalsToday: 3,
+            totalGoalsToday: 4,
             widgetGoals: [
-                WidgetGoalSnapshot(id: UUID(), name: "Walk", emoji: "🚶", progress: 3900, target: 10000, unit: "steps", calories: 0)
-            ]
+                WidgetGoalSnapshot(
+                    id: UUID(),
+                    name: "Walk",
+                    emoji: "🚶",
+                    progress: 4200,
+                    target: 10000,
+                    unit: "steps",
+                    calories: 120
+                )
+            ],
+            includeJournalShortcut: true
         )
     }
 
@@ -826,18 +976,27 @@ struct MindSnapWidgetEntryView: View {
         MindSnapWidgetEntry(
             date: Date(),
             todaysMood: nil,
-            entryCount: 1,
-            streakCount: 2,
+            entryCount: 2,
+            streakCount: 5,
             lastEntryPreview: nil,
-            goalName: "Goals",
-            goalProgress: 3900,
+            goalName: "Walk",
+            goalProgress: 4200,
             goalTarget: 10000,
             goalUnit: "steps",
             completedGoalsToday: 1,
-            totalGoalsToday: 3,
+            totalGoalsToday: 4,
             widgetGoals: [
-                WidgetGoalSnapshot(id: UUID(), name: "Walk", emoji: "🚶", progress: 3900, target: 10000, unit: "steps", calories: 0)
-            ]
+                WidgetGoalSnapshot(
+                    id: UUID(),
+                    name: "Walk",
+                    emoji: "🚶",
+                    progress: 4200,
+                    target: 10000,
+                    unit: "steps",
+                    calories: 120
+                )
+            ],
+            includeJournalShortcut: true
         )
     }
 }

@@ -410,9 +410,10 @@ class GoalViewModel {
     // Always save immediately after any change.
     // Never rely on automatic saves.
     // --------------------------------------------------------
-    func saveContext() {
+    private func saveContext() {
         do {
             try modelContext.save()
+            WidgetCenter.shared.reloadAllTimelines()
         } catch {
             errorMessage = "Save failed: \(error.localizedDescription)"
             print("saveContext error: \(error)")

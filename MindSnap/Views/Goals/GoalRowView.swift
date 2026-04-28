@@ -28,6 +28,8 @@ struct GoalRowView: View {
     let viewModel: GoalViewModel
     var isTomorrowPreview: Bool = false
     var isCompact: Bool = false
+    var onEditGoal: (() -> Void)?
+    var onDeleteGoal: (() -> Void)?
 
     @State private var completionPulse = false
     @State private var showingBurst = false
@@ -324,7 +326,10 @@ struct GoalRowView: View {
                 if isTomorrowPreview {
                     compactTomorrowBadge
                 } else {
-                    compactCompletionButton
+                    HStack(spacing: 6) {
+                        compactGoalMenu
+                        compactCompletionButton
+                    }
                 }
             }
 
@@ -332,8 +337,9 @@ struct GoalRowView: View {
                 Text(goal.name)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(isCompleted ? goal.color : .primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.9)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 4) {
                     if streak > 0 && !isTomorrowPreview {
@@ -463,6 +469,35 @@ struct GoalRowView: View {
             )
     }
 
+    @ViewBuilder
+    private var compactGoalMenu: some View {
+        if let onEditGoal, let onDeleteGoal {
+            Menu {
+                Button {
+                    onEditGoal()
+                } label: {
+                    Label("Edit Goal", systemImage: "pencil")
+                }
+
+                Button(role: .destructive) {
+                    onDeleteGoal()
+                } label: {
+                    Label("Delete Goal", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 26, height: 26)
+                    .background(
+                        Circle()
+                            .fill(Color(.systemGray5).opacity(colorScheme == .dark ? 0.25 : 0.75))
+                    )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     private var compactProgressRing: some View {
         ZStack {
             Circle()
@@ -559,7 +594,7 @@ struct GoalRowView: View {
             manualEditText = rawProgressInput(todaysProgress)
             showingManualEditSheet = true
         } label: {
-            Label("Edit", systemImage: "pencil")
+            Label("Log", systemImage: "pencil")
                 .font(.system(size: 10, weight: .semibold))
                 .labelStyle(.titleAndIcon)
                 .lineLimit(1)
@@ -608,7 +643,7 @@ struct GoalRowView: View {
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.orange.opacity(0.9))
 
-            Text("\(Int(caloriesBurned)) cal")
+            Text("\(Int(caloriesBurned)) cal today")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -1166,7 +1201,7 @@ struct GoalRowView: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(.secondary.opacity(0.85))
 
-                Text("Edit manually")
+                Text("Log Progress")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
 
@@ -1223,7 +1258,7 @@ struct GoalRowView: View {
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.orange.opacity(0.85))
 
-                    Text("\(Int(caloriesBurned)) cal")
+                    Text("\(Int(caloriesBurned)) cal today")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.secondary)
 
@@ -1244,53 +1279,55 @@ struct GoalRowView: View {
     // --------------------------------------------------------
     private var honestyEditSheet: some View {
         NavigationStack {
-            VStack(spacing: 24) {
+            VStack(spacing: 22) {
 
-                VStack(spacing: 12) {
+                VStack(spacing: 10) {
                     Text("🤝")
-                        .font(.system(size: 60))
+                        .font(.system(size: 56))
 
-                    Text("Manual Entry")
+                    Text("Log Progress")
                         .font(.title2)
                         .fontWeight(.bold)
+                        .foregroundStyle(.primary)
 
-                    Text(
-                        "Left your phone behind? No worries — " +
-                        "log what you actually did. " +
-                        "We trust your honesty!"
-                    )
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(4)
+                    Text("Update today’s progress manually.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.9)
                 }
-                .padding(.top, 20)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 18)
+                .padding(.bottom, 8)
 
                 HStack(spacing: 12) {
                     Text(goal.emoji)
                         .font(.title2)
-                    VStack(alignment: .leading) {
+
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(goal.name)
                             .font(.headline)
-                        Text(
-                            "Target: \(goal.targetValue) " +
-                            "\(goal.unit)"
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                            .foregroundStyle(.primary)
+
+                        Text("Target: \(formattedProgress(Double(goal.targetValue))) \(goal.unit)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
+
                     Spacer()
                 }
                 .padding(14)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color(.systemGray6))
+                        .fill(Color(.secondarySystemGroupedBackground))
                 )
 
                 VStack(spacing: 12) {
                     Text("How much did you actually do?")
                         .font(.subheadline)
                         .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
 
                     VStack(spacing: 8) {
                         TextField("0", text: $manualEditText)
@@ -1310,6 +1347,7 @@ struct GoalRowView: View {
 
                         HStack(spacing: 4) {
                             Text("Target: \(formattedProgress(Double(goal.targetValue)))")
+
                             if !goal.unit.isEmpty {
                                 Text(goal.unit)
                             }
@@ -1320,24 +1358,17 @@ struct GoalRowView: View {
 
                     if manualEditValue > 0 {
                         if manualEditValue >= Double(goal.targetValue) {
-                            Text(
-                                "🎉 Full " +
-                                "\(goal.pointsPerCompletion)" +
-                                " pts — Goal complete!"
-                            )
-                            .font(.caption)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.green)
+                            Text("🎉 Full \(goal.pointsPerCompletion) pts — Goal complete!")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.green)
                         } else {
                             let pts = goal.partialPoints(for: manualEditValue)
                             if pts > 0 {
-                                Text(
-                                    "~\(pts) partial pts " +
-                                    "for your effort 💪"
-                                )
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.orange)
+                                Text("~\(pts) partial pts for your effort 💪")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.orange)
                             }
                         }
                     }
@@ -1354,6 +1385,7 @@ struct GoalRowView: View {
                             Image(systemName: "heart.text.square.fill")
                                 .font(.caption)
                                 .foregroundStyle(.pink)
+
                             Text(
                                 viewModel.isUsingManualHealthOverride(for: goal)
                                     ? "Manual override is active"
@@ -1373,8 +1405,10 @@ struct GoalRowView: View {
                             dismissKeyboard()
                             isManualEditFocused = false
                             isResyncingHealth = true
+
                             Task {
                                 _ = await viewModel.resyncWithAppleHealth(for: goal)
+
                                 await MainActor.run {
                                     manualEditValue = todaysProgress
                                     manualEditText = rawProgressInput(todaysProgress)
@@ -1390,8 +1424,10 @@ struct GoalRowView: View {
                                 } else {
                                     Image(systemName: "arrow.triangle.2.circlepath")
                                 }
+
                                 Text("Re-sync with Apple Health")
                                     .fontWeight(.semibold)
+
                                 Spacer()
                             }
                             .font(.subheadline)
@@ -1436,36 +1472,25 @@ struct GoalRowView: View {
                 }
                 .disabled(!isManualEditValid)
                 .padding(.horizontal, 24)
-                .padding(.bottom, 20)
+                .padding(.bottom, 18)
             }
             .padding(.horizontal, 20)
             .background(Color(.systemGroupedBackground))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(
-                    placement: .navigationBarLeading
-                ) {
-                    Button("Save") {
-                        saveManualProgress()
-                    }
-                    .fontWeight(.semibold)
-                    .foregroundStyle(
-                        isManualEditValid ? goal.color : .secondary
-                    )
-                    .disabled(!isManualEditValid)
-                }
-                ToolbarItem(
-                    placement: .navigationBarTrailing
-                ) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Cancel") {
                         showingManualEditSheet = false
                     }
                     .foregroundStyle(.secondary)
                 }
+
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
+
                     Button("Done") {
-                        saveManualProgress()
+                        dismissKeyboard()
+                        isManualEditFocused = false
                     }
                 }
             }
@@ -1475,6 +1500,7 @@ struct GoalRowView: View {
         .onAppear {
             manualEditValue = todaysProgress
             manualEditText = rawProgressInput(todaysProgress)
+
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 isManualEditFocused = true
             }
@@ -1658,45 +1684,35 @@ struct GoalRowView: View {
             return
         }
 
-        withAnimation(.spring(duration: 0.15)) {
+        withAnimation(.spring(duration: 0.12)) {
             isPressed = true
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-            withAnimation(.spring(duration: 0.15)) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.spring(duration: 0.12)) {
                 isPressed = false
             }
         }
 
         let wasCompleted = isCompleted
+        viewModel.completeCheckboxGoal(goal)
 
         if !wasCompleted {
-            triggerCompletionAnimations()
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                viewModel.completeCheckboxGoal(goal)
-            }
-        } else {
-            viewModel.completeCheckboxGoal(goal)
+            triggerLightCompletionAnimation()
         }
     }
 
     private func handleProgressIncrement() {
         let wasCompleted = isCompleted
-
         let predictedProgress = todaysProgress + 1
         let willComplete =
             !wasCompleted &&
             predictedProgress >= Double(goal.targetValue)
 
-        if willComplete {
-            triggerCompletionAnimations()
+        viewModel.incrementProgress(goal)
 
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                viewModel.incrementProgress(goal)
-            }
-        } else {
-            viewModel.incrementProgress(goal)
+        if willComplete {
+            triggerLightCompletionAnimation()
         }
     }
 
@@ -1713,35 +1729,28 @@ struct GoalRowView: View {
         }
     }
 
-    private func triggerCompletionAnimations() {
+    private func triggerLightCompletionAnimation() {
         showingBurst = false
         showingPoints = false
         completionPulse = false
 
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.62)) {
-                completionPulse = true
-            }
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.78)) {
+            completionPulse = true
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-            showingBurst = true
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
             showingPoints = true
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-            withAnimation(.spring(response: 0.34, dampingFraction: 0.82)) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.34) {
+            withAnimation(.spring(response: 0.24, dampingFraction: 0.88)) {
                 completionPulse = false
             }
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) {
-            showingBurst = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
             showingPoints = false
         }
     }
@@ -1850,19 +1859,45 @@ struct GoalRowView: View {
 
     private func formattedProgress(_ value: Double) -> String {
         if allowsDecimalProgress {
-            return value.formatted(.number.precision(.fractionLength(0...1)))
-        }
-        return Int(value.rounded(.down)).formatted(.number)
-    }
+            let absoluteValue = abs(value)
 
-    private func rawProgressInput(_ value: Double) -> String {
-        if allowsDecimalProgress {
+            if absoluteValue > 0 && absoluteValue < 1 {
+                return value.formatted(
+                    .number
+                        .precision(.fractionLength(1...2))
+                        .grouping(.never)
+                )
+            }
+
             return value.formatted(
                 .number
                     .precision(.fractionLength(0...1))
                     .grouping(.never)
             )
         }
+
+        return Int(value.rounded(.down)).formatted(.number)
+    }
+
+    private func rawProgressInput(_ value: Double) -> String {
+        if allowsDecimalProgress {
+            let absoluteValue = abs(value)
+
+            if absoluteValue > 0 && absoluteValue < 1 {
+                return value.formatted(
+                    .number
+                        .precision(.fractionLength(1...2))
+                        .grouping(.never)
+                )
+            }
+
+            return value.formatted(
+                .number
+                    .precision(.fractionLength(0...1))
+                    .grouping(.never)
+            )
+        }
+
         return String(Int(value.rounded(.down)))
     }
 

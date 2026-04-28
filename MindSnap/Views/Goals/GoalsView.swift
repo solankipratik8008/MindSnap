@@ -182,7 +182,7 @@ struct GoalsView: View {
                             .foregroundStyle(.white)
                         Text("Current Level")
                             .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.8))
+                            .foregroundStyle(.white.opacity(0.92))
                     }
                 }
 
@@ -200,7 +200,7 @@ struct GoalsView: View {
                     }
                     Text("day streak")
                         .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(.white.opacity(0.90))
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 8)
@@ -222,7 +222,7 @@ struct GoalsView: View {
                     }
                     Text("Total Points")
                         .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(.white.opacity(0.90))
                 }
             }
             .padding(.horizontal, 16)
@@ -254,16 +254,16 @@ struct GoalsView: View {
                 HStack {
                     Text(level.message)
                         .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.85))
+                        .foregroundStyle(.white.opacity(0.94))
                     Spacer()
                     if nextLevel > total {
                         Text("\(nextLevel - total) pts to next level")
                             .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.85))
+                            .foregroundStyle(.white.opacity(0.92))
                     } else {
                         Text("Max level! 🏆")
                             .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.85))
+                            .foregroundStyle(.white.opacity(0.94))
                     }
                 }
             }
@@ -274,7 +274,7 @@ struct GoalsView: View {
             LinearGradient(
                 colors: [
                     Color.purple.opacity(colorScheme == .dark ? 0.68 : 0.76),
-                    Color.green.opacity(colorScheme == .dark ? 0.42 : 0.58)
+                    Color.green.opacity(colorScheme == .dark ? 0.34 : 0.44)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -421,7 +421,18 @@ struct GoalsView: View {
     // MARK: - Goal Row with swipe actions
     // --------------------------------------------------------
     private func goalRow(goal: Goal, vm: GoalViewModel) -> some View {
-        GoalRowView(goal: goal, viewModel: vm, isCompact: true)
+        GoalRowView(
+            goal: goal,
+            viewModel: vm,
+            isCompact: true,
+            onEditGoal: {
+                editingGoal = goal
+            },
+            onDeleteGoal: {
+                goalToDelete = goal
+                showingDeleteAlert = true
+            }
+        )
             .contextMenu {
                 Button {
                     editingGoal = goal
