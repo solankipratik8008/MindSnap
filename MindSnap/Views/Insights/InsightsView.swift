@@ -6,12 +6,14 @@
 //
 // ============================================================
 // InsightsView.swift
-// MindSnap — UPDATED WITH CALENDAR VIEW
+// MindSnap — Premium Monochrome Insights
 //
-// WHAT CHANGED:
-// Added CalendarMoodView below the mood charts.
-// Users can now see their mood history in a calendar format
-// and tap any day to see what they wrote.
+// SAFE UI UPDATE:
+// 1. Keeps the same MoodViewModel logic
+// 2. Keeps chart, summary, distribution, calendar, recent entries
+// 3. Keeps CalendarMoodView integration
+// 4. Updates UI to professional black/white theme
+// 5. Mood colors remain only as useful emotional accents
 // ============================================================
 
 import SwiftUI
@@ -20,7 +22,81 @@ import SwiftData
 struct InsightsView: View {
 
     let entries: [JournalEntry]
+
+    @Environment(\.colorScheme) private var colorScheme
     @State private var viewModel = MoodViewModel()
+
+    // --------------------------------------------------------
+    // MARK: - Premium Theme
+    // --------------------------------------------------------
+    private var appBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.03, green: 0.03, blue: 0.035)
+        : Color(red: 0.96, green: 0.96, blue: 0.97)
+    }
+
+    private var cardBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.09, green: 0.09, blue: 0.10)
+        : Color.white
+    }
+
+    private var softBackground: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.07)
+        : Color.black.opacity(0.045)
+    }
+
+    private var primaryText: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var secondaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.62)
+        : Color.black.opacity(0.52)
+    }
+
+    private var tertiaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.38)
+        : Color.black.opacity(0.34)
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.08)
+        : Color.black.opacity(0.07)
+    }
+
+    private var primaryButtonBackground: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var primaryButtonText: Color {
+        colorScheme == .dark ? .black : .white
+    }
+
+    private var shadowColor: Color {
+        colorScheme == .dark
+        ? Color.clear
+        : Color.black.opacity(0.06)
+    }
+
+    private func premiumCard(cornerRadius: CGFloat = 20) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(cardBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(borderColor, lineWidth: 1)
+            )
+            .shadow(
+                color: shadowColor,
+                radius: 12,
+                x: 0,
+                y: 6
+            )
+    }
 
     // --------------------------------------------------------
     // MARK: - Body
@@ -31,50 +107,29 @@ struct InsightsView: View {
                 VStack(spacing: 20) {
 
                     if entries.isEmpty {
-                        // ---- Empty State ----
                         emptyInsightsState
                     } else {
-                        // ---- Stats Header ----
                         statsHeaderSection
-
-                        // ---- Time Period Picker ----
                         periodPickerSection
 
-                        // ---- Mood Chart ----
                         MoodChartView(
                             data: viewModel.chartData,
                             selectedPeriod: viewModel.selectedPeriod
                         )
                         .padding(.horizontal, 16)
 
-                        // ---- Mood Summary ----
                         moodSummarySection
-
-                        // ---- Mood Distribution ----
                         moodDistributionSection
-
-                        // --------------------------------------------------------
-                        // Calendar Mood View — NEW
-                        //
-                        // Shows a full month calendar where each day
-                        // with a journal entry shows the mood emoji.
-                        // User can tap any day to see their entries.
-                        //
-                        // This is the most visually impressive feature
-                        // in the Insights tab — perfect for App Store
-                        // screenshots and portfolio showcase.
-                        // --------------------------------------------------------
                         calendarSection
-
-                        // ---- Recent Entries ----
                         recentMoodListSection
                     }
 
-                    Spacer(minLength: 20)
+                    Spacer(minLength: 24)
                 }
                 .padding(.top, 8)
+                .padding(.bottom, 24)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(appBackground)
             .navigationTitle("Insights")
             .navigationBarTitleDisplayMode(.large)
         }
@@ -88,40 +143,38 @@ struct InsightsView: View {
 
     // --------------------------------------------------------
     // MARK: - Calendar Section
-    //
-    // NEW: Beautiful mood calendar showing entire month.
-    // Positioned between mood distribution and recent entries
-    // so it flows naturally in the scroll view.
     // --------------------------------------------------------
     private var calendarSection: some View {
         VStack(alignment: .leading, spacing: 12) {
 
-            // ---- Section Header ----
             HStack {
-                // Calendar icon + title
-                HStack(spacing: 8) {
+                HStack(spacing: 10) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.purple.opacity(0.15))
-                            .frame(width: 32, height: 32)
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(primaryButtonBackground)
+                            .frame(width: 34, height: 34)
+
                         Image(systemName: "calendar")
-                            .foregroundStyle(.purple)
-                            .font(.system(size: 16))
+                            .foregroundStyle(primaryButtonText)
+                            .font(.system(size: 16, weight: .semibold))
                     }
+
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Mood Calendar")
                             .font(.headline)
                             .fontWeight(.bold)
+                            .foregroundStyle(primaryText)
+
                         Text("Tap any day to see your entries")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(secondaryText)
                     }
                 }
+
                 Spacer()
             }
             .padding(.horizontal, 16)
 
-            // ---- The Calendar ----
             CalendarMoodView(entries: entries)
                 .padding(.horizontal, 16)
         }
@@ -136,41 +189,51 @@ struct InsightsView: View {
 
             ZStack {
                 Circle()
-                    .fill(Color.purple.opacity(0.1))
-                    .frame(width: 120, height: 120)
+                    .fill(softBackground)
+                    .frame(width: 122, height: 122)
+                    .overlay(
+                        Circle()
+                            .stroke(borderColor, lineWidth: 1)
+                    )
+
                 Image(systemName: "chart.bar.xaxis")
-                    .font(.system(size: 50))
-                    .foregroundStyle(.purple.opacity(0.6))
+                    .font(.system(size: 50, weight: .semibold))
+                    .foregroundStyle(primaryText.opacity(0.78))
             }
 
             VStack(spacing: 8) {
                 Text("No Insights Yet")
                     .font(.title2)
                     .fontWeight(.bold)
+                    .foregroundStyle(primaryText)
 
-                Text("Start journaling to see your\nmood trends and patterns here.")
+                Text("Start journaling to see your mood trends and patterns here.")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
+                    .padding(.horizontal, 24)
             }
 
             HStack(spacing: 12) {
                 Image(systemName: "lightbulb.fill")
-                    .foregroundStyle(.yellow)
+                    .foregroundStyle(.orange)
                     .font(.title3)
-                Text("Write at least 3 entries to\nsee meaningful mood patterns.")
+
+                Text("Write at least 3 entries to see meaningful mood patterns.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.yellow.opacity(0.08))
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.orange.opacity(colorScheme == .dark ? 0.12 : 0.07))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.yellow.opacity(0.2),
-                                    lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Color.orange.opacity(0.18), lineWidth: 1)
                     )
             )
             .padding(.horizontal, 32)
@@ -189,9 +252,10 @@ struct InsightsView: View {
                 title: "Entries",
                 value: "\(viewModel.totalEntriesInPeriod)",
                 subtitle: "in \(viewModel.selectedPeriod.days) days",
-                color: .purple,
+                color: primaryText,
                 icon: "square.and.pencil"
             )
+
             statCard(
                 title: "Avg Score",
                 value: String(
@@ -202,6 +266,7 @@ struct InsightsView: View {
                 color: viewModel.moodSummary.dominantMood.color,
                 icon: "chart.line.uptrend.xyaxis"
             )
+
             statCard(
                 title: "Top Mood",
                 value: viewModel.moodSummary.dominantMood.emoji,
@@ -220,45 +285,44 @@ struct InsightsView: View {
         color: Color,
         icon: String
     ) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 5) {
                 Image(systemName: icon)
                     .font(.caption)
                     .foregroundStyle(color)
+
                 Text(title)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
             }
+
             Text(value)
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundStyle(color)
+
             Text(subtitle)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .fontWeight(.medium)
+                .foregroundStyle(secondaryText)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(Color(.systemBackground))
-                .shadow(
-                    color: .black.opacity(0.05),
-                    radius: 5, x: 0, y: 2
-                )
-        )
+        .background(premiumCard(cornerRadius: 18))
     }
 
     // --------------------------------------------------------
     // MARK: - Period Picker
     // --------------------------------------------------------
     private var periodPickerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Time Period")
                 .font(.subheadline)
                 .fontWeight(.semibold)
+                .foregroundStyle(primaryText)
                 .padding(.horizontal, 16)
 
             Picker("Period", selection: Binding(
@@ -266,10 +330,12 @@ struct InsightsView: View {
                 set: { viewModel.selectedPeriod = $0 }
             )) {
                 ForEach(TimePeriod.allCases, id: \.self) { period in
-                    Text(period.rawValue).tag(period)
+                    Text(period.rawValue)
+                        .tag(period)
                 }
             }
             .pickerStyle(.segmented)
+            .tint(primaryText)
             .padding(.horizontal, 16)
         }
     }
@@ -281,21 +347,31 @@ struct InsightsView: View {
         VStack(spacing: 12) {
             Text(viewModel.moodSummary.summaryText)
                 .font(.headline)
+                .foregroundStyle(primaryText)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
 
             Text(viewModel.moodSummary.scoreDescription)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .fontWeight(.medium)
+                .foregroundStyle(secondaryText)
                 .multilineTextAlignment(.center)
         }
-        .padding(.vertical, 16)
+        .padding(.vertical, 18)
         .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(
                     viewModel.moodSummary.dominantMood.color
-                        .opacity(0.08)
+                        .opacity(colorScheme == .dark ? 0.13 : 0.075)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(
+                            viewModel.moodSummary.dominantMood.color
+                                .opacity(colorScheme == .dark ? 0.18 : 0.13),
+                            lineWidth: 1
+                        )
                 )
         )
         .padding(.horizontal, 16)
@@ -308,6 +384,7 @@ struct InsightsView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Mood Breakdown")
                 .font(.headline)
+                .foregroundStyle(primaryText)
 
             ForEach(MoodType.allCases, id: \.self) { mood in
                 let count = viewModel.moodDistribution[mood] ?? 0
@@ -320,22 +397,24 @@ struct InsightsView: View {
 
                     Text(mood.displayName)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .fontWeight(.medium)
+                        .foregroundStyle(secondaryText)
                         .frame(width: 55, alignment: .leading)
 
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(Color(.systemGray5))
+                                .fill(softBackground)
                                 .frame(height: 8)
+
                             RoundedRectangle(cornerRadius: 4)
-                                .fill(mood.color)
+                                .fill(mood.color.opacity(colorScheme == .dark ? 0.90 : 0.78))
                                 .frame(
                                     width: total > 0
-                                        ? geo.size.width *
-                                          CGFloat(count) /
-                                          CGFloat(total)
-                                        : 0,
+                                    ? geo.size.width *
+                                      CGFloat(count) /
+                                      CGFloat(total)
+                                    : 0,
                                     height: 8
                                 )
                                 .animation(
@@ -348,17 +427,14 @@ struct InsightsView: View {
 
                     Text("\(count)d")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .fontWeight(.medium)
+                        .foregroundStyle(secondaryText)
                         .frame(width: 24, alignment: .trailing)
                 }
             }
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.05), radius: 5)
-        )
+        .background(premiumCard(cornerRadius: 20))
         .padding(.horizontal, 16)
     }
 
@@ -369,13 +445,15 @@ struct InsightsView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Recent Entries")
                 .font(.headline)
+                .foregroundStyle(primaryText)
 
             let recentEntries = Array(entries.prefix(5))
 
             if recentEntries.isEmpty {
                 Text("No entries yet. Start journaling!")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 20)
@@ -384,53 +462,56 @@ struct InsightsView: View {
                     HStack(spacing: 12) {
                         ZStack {
                             Circle()
-                                .fill(entry.moodType.color.opacity(0.15))
-                                .frame(width: 40, height: 40)
+                                .fill(entry.moodType.color.opacity(colorScheme == .dark ? 0.18 : 0.11))
+                                .frame(width: 42, height: 42)
+                                .overlay(
+                                    Circle()
+                                        .stroke(
+                                            entry.moodType.color.opacity(0.18),
+                                            lineWidth: 1
+                                        )
+                                )
+
                             Text(entry.moodType.emoji)
                                 .font(.title3)
                         }
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: 3) {
                             Text(entry.shortDate)
                                 .font(.caption)
                                 .fontWeight(.semibold)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(secondaryText)
+
                             Text(entry.previewText)
                                 .font(.subheadline)
                                 .lineLimit(1)
-                                .foregroundStyle(.primary)
+                                .foregroundStyle(primaryText)
                         }
 
                         Spacer()
 
-                        Text(String(format: "%+.2f",
-                                    entry.sentimentScore))
+                        Text(String(format: "%+.2f", entry.sentimentScore))
                             .font(.caption2)
                             .fontWeight(.semibold)
                             .foregroundStyle(entry.moodType.color)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 4)
                             .background(
                                 Capsule()
-                                    .fill(entry.moodType.color
-                                        .opacity(0.12))
+                                    .fill(entry.moodType.color.opacity(colorScheme == .dark ? 0.16 : 0.10))
                             )
                     }
                     .padding(.vertical, 4)
 
                     if entry.id != recentEntries.last?.id {
                         Divider()
-                            .padding(.leading, 52)
+                            .padding(.leading, 54)
                     }
                 }
             }
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.05), radius: 5)
-        )
+        .background(premiumCard(cornerRadius: 20))
         .padding(.horizontal, 16)
     }
 }
@@ -438,7 +519,7 @@ struct InsightsView: View {
 // ============================================================
 // Preview
 // ============================================================
-#Preview {
+#Preview("Light Mode") {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
         for: JournalEntry.self,
@@ -463,6 +544,38 @@ struct InsightsView: View {
         )
     }
 
-    InsightsView(entries: entries)
-        .modelContainer(container)
+    NavigationStack {
+        InsightsView(entries: entries)
+            .modelContainer(container)
+    }
+}
+
+#Preview("Dark Mode") {
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
+    let container = try! ModelContainer(
+        for: JournalEntry.self,
+        configurations: config
+    )
+
+    let samples: [(String, MoodType, Double)] = [
+        ("Amazing day! Got the promotion!", .happy, 0.88),
+        ("Peaceful morning walk.", .calm, 0.35),
+        ("Just a regular Tuesday.", .neutral, 0.02),
+        ("Deadline stress today.", .anxious, -0.41),
+        ("Really missing home.", .sad, -0.63)
+    ]
+
+    let entries = samples.map { text, mood, score in
+        JournalEntry(
+            text: text,
+            moodType: mood,
+            sentimentScore: score
+        )
+    }
+
+    NavigationStack {
+        InsightsView(entries: entries)
+            .modelContainer(container)
+    }
+    .preferredColorScheme(.dark)
 }

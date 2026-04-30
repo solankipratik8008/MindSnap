@@ -5,24 +5,26 @@
 //  Created by Pratik Solanki on 2026-04-21.
 //
 
-
 // ============================================================
 // SettingsView.swift
-// MindSnap — APPLE GUIDELINES COMPLIANT VERSION
+// MindSnap — Premium Monochrome Settings
 //
-// WHAT CHANGED:
-// 1. Added crisis resources section (Apple Guideline 1.4.1)
-//    Mental health apps MUST include crisis helplines
-// 2. Fixed "AI" claims to "on-device intelligence"
-//    More accurate since we use Apple's ML framework
+// SAFE UI UPDATE:
+// 1. Keeps all existing settings functionality
+// 2. Keeps Face ID, Health, reminders, widgets, data deletion
+// 3. Keeps crisis resources section for App Review safety
+// 4. Keeps privacy policy navigation
+// 5. Updates UI to professional black/white theme
+// 6. Supports light and dark mode
 // ============================================================
 
+import SwiftUI
+import SwiftData
+import UserNotifications
+import WidgetKit
 
 // --------------------------------------------------------
 // CrisisResource — Data model for a crisis helpline
-//
-// Simple struct to hold crisis resource information.
-// Used in the supportSection of SettingsView.
 // --------------------------------------------------------
 struct CrisisResource {
     let country: String
@@ -31,13 +33,6 @@ struct CrisisResource {
     let phone: String
     let description: String
 }
-
-
-
-import SwiftUI
-import SwiftData
-import UserNotifications
-import WidgetKit
 
 enum AppColorScheme: String, CaseIterable {
     case light  = "Light"
@@ -79,12 +74,13 @@ struct SettingsView: View {
     @AppStorage("reminderHour") private var reminderHour = 20
     @AppStorage("userName") private var userName = ""
     @AppStorage("appColorScheme") private var appColorScheme = AppColorScheme.system.rawValue
+
     @AppStorage(
         "widgetGoalIDs",
         store: UserDefaults(suiteName: "group.com.pratik.MindSnap")
     )
     private var widgetGoalIDsRaw = ""
-    
+
     @AppStorage(
         "widgetIncludeJournalShortcut",
         store: UserDefaults(suiteName: "group.com.pratik.MindSnap")
@@ -93,8 +89,11 @@ struct SettingsView: View {
 
     // ---- Services ----
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
+
     @Query(sort: \Goal.createdAt, order: .reverse)
     private var settingsGoals: [Goal]
+
     @State private var notificationService = NotificationService()
     @State private var authService = AuthService()
     @State private var healthKitService = HealthKitService()
@@ -113,6 +112,7 @@ struct SettingsView: View {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"]
             as? String ?? "1.0"
     }
+
     private var buildNumber: String {
         Bundle.main.infoDictionary?["CFBundleVersion"]
             as? String ?? "1"
@@ -120,6 +120,81 @@ struct SettingsView: View {
 
     private var selectedScheme: AppColorScheme {
         AppColorScheme(rawValue: appColorScheme) ?? .system
+    }
+
+    // --------------------------------------------------------
+    // MARK: - Premium Theme
+    // --------------------------------------------------------
+    private var appBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.03, green: 0.03, blue: 0.035)
+        : Color(red: 0.96, green: 0.96, blue: 0.97)
+    }
+
+    private var cardFill: Color {
+        colorScheme == .dark
+        ? Color(red: 0.09, green: 0.09, blue: 0.10)
+        : Color.white
+    }
+
+    private var rowFill: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.07)
+        : Color.black.opacity(0.045)
+    }
+
+    private var primaryText: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var secondaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.62)
+        : Color.black.opacity(0.52)
+    }
+
+    private var tertiaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.38)
+        : Color.black.opacity(0.34)
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.08)
+        : Color.black.opacity(0.07)
+    }
+
+    private var primaryButtonBackground: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var primaryButtonText: Color {
+        colorScheme == .dark ? .black : .white
+    }
+
+    private var destructiveFill: Color {
+        Color.red.opacity(colorScheme == .dark ? 0.18 : 0.10)
+    }
+
+    private func settingsIcon(
+        systemName: String,
+        fill: Color? = nil,
+        foreground: Color? = nil
+    ) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(fill ?? primaryButtonBackground)
+                .frame(width: 30, height: 30)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(borderColor, lineWidth: fill == nil ? 1 : 0)
+                )
+
+            Image(systemName: systemName)
+                .foregroundStyle(foreground ?? primaryButtonText)
+                .font(.system(size: 14, weight: .semibold))
+        }
     }
 
     // --------------------------------------------------------
@@ -134,12 +209,15 @@ struct SettingsView: View {
             notificationsSection
             healthSection
             dataSection
-            supportSection      // ← NEW: Crisis resources
+            supportSection
             aboutSection
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
+        .background(appBackground)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
+        .tint(primaryText)
 
         .alert("Clear All Data", isPresented: $showingClearDataAlert) {
             Button("Delete Everything", role: .destructive) {
@@ -209,50 +287,59 @@ struct SettingsView: View {
     }
 
     // --------------------------------------------------------
-    // MARK: - Sections
+    // MARK: - Profile
     // --------------------------------------------------------
-
     private var profileSection: some View {
         Section {
-            HStack {
+            HStack(spacing: 13) {
                 ZStack {
                     Circle()
-                        .fill(Color.purple.opacity(0.15))
-                        .frame(width: 50, height: 50)
+                        .fill(primaryButtonBackground)
+                        .frame(width: 52, height: 52)
+
                     if userName.isEmpty {
                         Image(systemName: "person.fill")
-                            .foregroundStyle(.purple)
-                            .font(.title2)
+                            .foregroundStyle(primaryButtonText)
+                            .font(.title3.weight(.semibold))
                     } else {
-                        Text(String(userName.prefix(1)).uppercased())
+                        Text(String(userName.prefix(1)).capitalized)
                             .font(.title2)
                             .fontWeight(.bold)
-                            .foregroundStyle(.purple)
+                            .foregroundStyle(primaryButtonText)
                     }
                 }
-                VStack(alignment: .leading, spacing: 2) {
+
+                VStack(alignment: .leading, spacing: 3) {
                     Text(userName.isEmpty ? "Add Your Name" : userName)
                         .font(.headline)
-                        .foregroundStyle(userName.isEmpty ? .secondary : .primary)
-                    Text("Tap to edit")
+                        .foregroundStyle(userName.isEmpty ? secondaryText : primaryText)
+
+                    Text("Tap to edit your display name")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryText)
                 }
+
                 Spacer()
+
                 Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(tertiaryText)
             }
+            .padding(.vertical, 4)
             .contentShape(Rectangle())
             .onTapGesture {
                 tempName = userName
                 showingNameEditor = true
             }
+            .listRowBackground(cardFill)
         } header: {
             Text("Profile")
         }
     }
 
+    // --------------------------------------------------------
+    // MARK: - Widget
+    // --------------------------------------------------------
     private var widgetGoalsSection: some View {
         Section {
             Toggle(isOn: Binding(
@@ -265,28 +352,24 @@ struct SettingsView: View {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Include Journal Shortcut")
+                            .foregroundStyle(primaryText)
+
                         Text("Show a private Write Journal action in widgets")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(secondaryText)
                     }
                 } icon: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(Color.purple)
-                            .frame(width: 28, height: 28)
-
-                        Image(systemName: "square.and.pencil")
-                            .foregroundStyle(.white)
-                            .font(.system(size: 14))
-                    }
+                    settingsIcon(systemName: "square.and.pencil")
                 }
             }
-            .tint(.purple)
+            .tint(primaryText)
+            .listRowBackground(cardFill)
 
             if activeWidgetCandidateGoals.isEmpty {
                 Text("Create an active goal to customize your widgets.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(secondaryText)
+                    .listRowBackground(cardFill)
             } else {
                 ForEach(activeWidgetCandidateGoals.prefix(8), id: \.id) { goal in
                     Button {
@@ -299,12 +382,12 @@ struct SettingsView: View {
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(goal.name)
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(primaryText)
                                     .lineLimit(1)
 
                                 Text("\(goal.category.rawValue) • \(goal.goalType.rawValue)")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(secondaryText)
                                     .lineLimit(1)
                             }
 
@@ -312,10 +395,10 @@ struct SettingsView: View {
 
                             if selectedWidgetGoalIDs.contains(goal.id) {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.purple)
+                                    .foregroundStyle(primaryText)
                             } else {
                                 Image(systemName: "circle")
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(tertiaryText)
                             }
                         }
                     }
@@ -324,6 +407,7 @@ struct SettingsView: View {
                         !selectedWidgetGoalIDs.contains(goal.id) &&
                         selectedWidgetGoalIDs.count >= 4
                     )
+                    .listRowBackground(cardFill)
                 }
             }
         } header: {
@@ -333,30 +417,31 @@ struct SettingsView: View {
         }
     }
 
-
+    // --------------------------------------------------------
+    // MARK: - Security
+    // --------------------------------------------------------
     private var securitySection: some View {
         Section {
             Toggle(isOn: $isFaceIDEnabled) {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\(authService.biometricType)")
+                            .foregroundStyle(primaryText)
+
                         Text("Lock app on background")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(secondaryText)
                     }
                 } icon: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(Color.blue)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: authService.biometricType == "Touch ID"
-                              ? "touchid" : "faceid")
-                            .foregroundStyle(.white)
-                            .font(.system(size: 14))
-                    }
+                    settingsIcon(
+                        systemName: authService.biometricType == "Touch ID"
+                        ? "touchid"
+                        : "faceid"
+                    )
                 }
             }
-            .tint(.blue)
+            .tint(primaryText)
+            .listRowBackground(cardFill)
         } header: {
             Text("Security")
         } footer: {
@@ -364,46 +449,40 @@ struct SettingsView: View {
         }
     }
 
+    // --------------------------------------------------------
+    // MARK: - Appearance
+    // --------------------------------------------------------
     private var appearanceSection: some View {
         Section {
             Toggle(isOn: $showMoodOnHome) {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Show Mood on Home")
+                            .foregroundStyle(primaryText)
+
                         Text("Display today's mood in header")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(secondaryText)
                     }
                 } icon: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(Color.orange)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "face.smiling")
-                            .foregroundStyle(.white)
-                            .font(.system(size: 14))
-                    }
+                    settingsIcon(systemName: "face.smiling")
                 }
             }
-            .tint(.orange)
+            .tint(primaryText)
+            .listRowBackground(cardFill)
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Appearance")
+                            .foregroundStyle(primaryText)
+
                         Text("Choose how MindSnap looks")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(secondaryText)
                     }
                 } icon: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(Color.indigo)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "paintpalette.fill")
-                            .foregroundStyle(.white)
-                            .font(.system(size: 14))
-                    }
+                    settingsIcon(systemName: "paintpalette.fill")
                 }
 
                 Picker("Appearance", selection: $appColorScheme) {
@@ -413,18 +492,20 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .tint(.purple)
+                .tint(primaryText)
 
                 HStack(spacing: 6) {
                     Image(systemName: selectedScheme.icon)
                         .foregroundStyle(selectedScheme.iconColor)
                         .font(.caption)
+
                     Text(appearanceDescription)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryText)
                 }
             }
             .padding(.vertical, 4)
+            .listRowBackground(cardFill)
 
         } header: {
             Text("Appearance")
@@ -433,6 +514,9 @@ struct SettingsView: View {
         }
     }
 
+    // --------------------------------------------------------
+    // MARK: - Notifications
+    // --------------------------------------------------------
     private var notificationsSection: some View {
         Section {
             Toggle(isOn: Binding(
@@ -442,28 +526,25 @@ struct SettingsView: View {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Daily Reminder")
+                            .foregroundStyle(primaryText)
+
                         Text("Remind me to journal each day")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(secondaryText)
                     }
                 } icon: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(Color.green)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "bell.fill")
-                            .foregroundStyle(.white)
-                            .font(.system(size: 14))
-                    }
+                    settingsIcon(systemName: "bell.fill")
                 }
             }
-            .tint(.green)
+            .tint(primaryText)
+            .listRowBackground(cardFill)
 
             if isDailyReminderEnabled && !notificationService.isAuthorized {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(.orange)
                         .font(.caption)
+
                     Text("Notification permission required. Tap to open Settings.")
                         .font(.caption)
                         .foregroundStyle(.orange)
@@ -474,27 +555,25 @@ struct SettingsView: View {
                         UIApplication.shared.open(url)
                     }
                 }
+                .listRowBackground(cardFill)
             }
 
             if isDailyReminderEnabled {
                 HStack {
                     Label {
                         Text("Reminder Time")
+                            .foregroundStyle(primaryText)
                     } icon: {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 7)
-                                .fill(Color.green.opacity(0.7))
-                                .frame(width: 28, height: 28)
-                            Image(systemName: "clock.fill")
-                                .foregroundStyle(.white)
-                                .font(.system(size: 14))
-                        }
+                        settingsIcon(systemName: "clock.fill")
                     }
+
                     Spacer()
+
                     Picker("Hour", selection: Binding(
                         get: { reminderHour },
                         set: { newHour in
                             reminderHour = newHour
+
                             Task {
                                 await notificationService
                                     .scheduleDailyReminder(hour: newHour)
@@ -506,9 +585,10 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .tint(.green)
+                    .tint(primaryText)
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
+                .listRowBackground(cardFill)
             }
         } header: {
             Text("Notifications")
@@ -522,60 +602,9 @@ struct SettingsView: View {
         .animation(.easeInOut(duration: 0.2), value: isDailyReminderEnabled)
     }
 
-    private var dataSection: some View {
-        Section {
-            Button(role: .destructive) {
-                showingClearDataAlert = true
-            } label: {
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Clear All Journal Data")
-                            .foregroundStyle(.red)
-                        Text("Permanently delete all entries")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                } icon: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(Color.red)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "trash.fill")
-                            .foregroundStyle(.white)
-                            .font(.system(size: 14))
-                    }
-                }
-            }
-
-            Button(role: .destructive) {
-                showingDeleteAccountAlert = true
-            } label: {
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Delete Account & All Data")
-                            .foregroundStyle(.red)
-                        Text("Delete journals, goals, progress, reminders, points, and preferences")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                } icon: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(Color.red.opacity(0.9))
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "person.crop.circle.badge.xmark")
-                            .foregroundStyle(.white)
-                            .font(.system(size: 14))
-                    }
-                }
-            }
-        } header: {
-            Text("Data")
-        } footer: {
-            Text("MindSnap does not create a separate server account. Deleting all data removes MindSnap records from this device; if iCloud sync is enabled, saved deletions can sync through Apple's CloudKit service.")
-        }
-    }
-
+    // --------------------------------------------------------
+    // MARK: - Health
+    // --------------------------------------------------------
     private var healthSection: some View {
         Section {
             Toggle(isOn: Binding(
@@ -585,27 +614,24 @@ struct SettingsView: View {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Apple Health Sync")
+                            .foregroundStyle(primaryText)
+
                         Text("Auto-fill compatible progress goals")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(secondaryText)
                     }
                 } icon: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(Color.red)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "heart.fill")
-                            .foregroundStyle(.white)
-                            .font(.system(size: 14))
-                    }
+                    settingsIcon(systemName: "heart.fill")
                 }
             }
-            .tint(.red)
+            .tint(primaryText)
+            .listRowBackground(cardFill)
 
             VStack(alignment: .leading, spacing: 8) {
                 Label("Health Data Privacy", systemImage: "lock.shield.fill")
                     .font(.subheadline)
                     .fontWeight(.semibold)
+                    .foregroundStyle(primaryText)
 
                 Text("MindSnap reads your Health data only to update your goal progress.")
                 Text("MindSnap does not sell or share Health data.")
@@ -614,8 +640,9 @@ struct SettingsView: View {
                 Text("If Health access is off, manual progress entry still works.")
             }
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(secondaryText)
             .padding(.vertical, 6)
+            .listRowBackground(cardFill)
         } header: {
             Text("Health")
         } footer: {
@@ -624,21 +651,67 @@ struct SettingsView: View {
     }
 
     // --------------------------------------------------------
-    // supportSection — INTERNATIONAL VERSION
-    //
-    // Shows crisis resources based on user's region.
-    // Falls back to international resources if region
-    // is not specifically supported.
+    // MARK: - Data
+    // --------------------------------------------------------
+    private var dataSection: some View {
+        Section {
+            Button(role: .destructive) {
+                showingClearDataAlert = true
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Clear All Journal Data")
+                            .foregroundStyle(.red)
+
+                        Text("Permanently delete all entries")
+                            .font(.caption)
+                            .foregroundStyle(secondaryText)
+                    }
+                } icon: {
+                    settingsIcon(
+                        systemName: "trash.fill",
+                        fill: destructiveFill,
+                        foreground: .red
+                    )
+                }
+            }
+            .listRowBackground(cardFill)
+
+            Button(role: .destructive) {
+                showingDeleteAccountAlert = true
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Delete Account & All Data")
+                            .foregroundStyle(.red)
+
+                        Text("Delete journals, goals, progress, reminders, points, and preferences")
+                            .font(.caption)
+                            .foregroundStyle(secondaryText)
+                    }
+                } icon: {
+                    settingsIcon(
+                        systemName: "person.crop.circle.badge.xmark",
+                        fill: destructiveFill,
+                        foreground: .red
+                    )
+                }
+            }
+            .listRowBackground(cardFill)
+        } header: {
+            Text("Data")
+        } footer: {
+            Text("MindSnap does not create a separate server account. Deleting all data removes MindSnap records from this device; if iCloud sync is enabled, saved deletions can sync through Apple's CloudKit service.")
+        }
+    }
+
+    // --------------------------------------------------------
+    // MARK: - Mental Health Support
     // --------------------------------------------------------
     private var supportSection: some View {
         Section {
-
-            // ---- Universal International Resource ----
-            // Works for EVERY country — always show this first
             Button {
-                if let url = URL(
-                    string: "https://findahelpline.com"
-                ) {
+                if let url = URL(string: "https://findahelpline.com") {
                     UIApplication.shared.open(url)
                 }
             } label: {
@@ -647,27 +720,22 @@ struct SettingsView: View {
                         Text("Find a Helpline")
                             .font(.subheadline)
                             .fontWeight(.semibold)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(primaryText)
+
                         Text("findahelpline.com")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(secondaryText)
+
                         Text("Crisis support in 200+ countries")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(secondaryText)
                     }
                 } icon: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(Color.purple)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "globe")
-                            .foregroundStyle(.white)
-                            .font(.system(size: 14))
-                    }
+                    settingsIcon(systemName: "globe")
                 }
             }
+            .listRowBackground(cardFill)
 
-            // ---- Region Specific Resources ----
             ForEach(regionalResources, id: \.country) { resource in
                 Button {
                     if let url = URL(string: "tel:\(resource.phone.filter { $0.isNumber })") {
@@ -678,36 +746,30 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 6) {
                                 Text(resource.flag)
+
                                 Text(resource.name)
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(primaryText)
                             }
+
                             Text(resource.phone)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(secondaryText)
+
                             Text(resource.description)
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(secondaryText)
                         }
                     } icon: {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 7)
-                                .fill(Color.green)
-                                .frame(width: 28, height: 28)
-                            Image(systemName: "phone.fill")
-                                .foregroundStyle(.white)
-                                .font(.system(size: 14))
-                        }
+                        settingsIcon(systemName: "phone.fill")
                     }
                 }
+                .listRowBackground(cardFill)
             }
 
-            // ---- Crisis Text Line ----
             Button {
-                if let url = URL(
-                    string: "https://www.crisistextline.org"
-                ) {
+                if let url = URL(string: "https://www.crisistextline.org") {
                     UIApplication.shared.open(url)
                 }
             } label: {
@@ -716,25 +778,21 @@ struct SettingsView: View {
                         Text("Crisis Text Line")
                             .font(.subheadline)
                             .fontWeight(.semibold)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(primaryText)
+
                         Text("crisistextline.org")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(secondaryText)
+
                         Text("Text-based support — USA, Canada, UK, Ireland")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(secondaryText)
                     }
                 } icon: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(Color.blue)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "message.fill")
-                            .foregroundStyle(.white)
-                            .font(.system(size: 14))
-                    }
+                    settingsIcon(systemName: "message.fill")
                 }
             }
+            .listRowBackground(cardFill)
 
         } header: {
             Text("Mental Health Support")
@@ -744,13 +802,6 @@ struct SettingsView: View {
         }
     }
 
-    // --------------------------------------------------------
-    // regionalResources — Crisis lines for major regions
-    //
-    // Covers the most common countries that will download
-    // your app from the App Store.
-    // findahelpline.com covers ALL other countries.
-    // --------------------------------------------------------
     private var regionalResources: [CrisisResource] {[
         CrisisResource(
             country: "Canada",
@@ -789,65 +840,58 @@ struct SettingsView: View {
         )
     ]}
 
+    // --------------------------------------------------------
+    // MARK: - About
+    // --------------------------------------------------------
     private var aboutSection: some View {
         Section {
             HStack {
                 Label {
                     Text("Version")
+                        .foregroundStyle(primaryText)
                 } icon: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(Color.purple)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "info.circle.fill")
-                            .foregroundStyle(.white)
-                            .font(.system(size: 14))
-                    }
+                    settingsIcon(systemName: "info.circle.fill")
                 }
+
                 Spacer()
+
                 Text("\(appVersion) (\(buildNumber))")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(secondaryText)
             }
+            .listRowBackground(cardFill)
 
             NavigationLink(destination: PrivacyPolicyView()) {
                 Label {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Privacy Policy")
+                            .foregroundStyle(primaryText)
+
                         Text("Your data & privacy")
                             .font(.caption2)
-                            .foregroundStyle(.green)
+                            .foregroundStyle(secondaryText)
                     }
                 } icon: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(Color.gray)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "hand.raised.fill")
-                            .foregroundStyle(.white)
-                            .font(.system(size: 14))
-                    }
+                    settingsIcon(systemName: "hand.raised.fill")
                 }
             }
-            .foregroundStyle(.primary)
+            .foregroundStyle(primaryText)
+            .listRowBackground(cardFill)
 
             HStack {
                 Label {
                     Text("Made with")
+                        .foregroundStyle(primaryText)
                 } icon: {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 7)
-                            .fill(Color.pink)
-                            .frame(width: 28, height: 28)
-                        Image(systemName: "heart.fill")
-                            .foregroundStyle(.white)
-                            .font(.system(size: 14))
-                    }
+                    settingsIcon(systemName: "heart.fill")
                 }
+
                 Spacer()
+
                 Text("Pratik's ❤️")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(secondaryText)
                     .font(.subheadline)
             }
+            .listRowBackground(cardFill)
 
         } header: {
             Text("About")
@@ -855,7 +899,7 @@ struct SettingsView: View {
     }
 
     // --------------------------------------------------------
-    // nameEditorSheet
+    // MARK: - Name Editor
     // --------------------------------------------------------
     private var nameEditorSheet: some View {
         NavigationStack {
@@ -870,18 +914,25 @@ struct SettingsView: View {
                     Text("Only stored on your device.")
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(appBackground)
             .navigationTitle("Edit Name")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { showingNameEditor = false }
+                    Button("Cancel") {
+                        showingNameEditor = false
+                    }
+                    .foregroundStyle(secondaryText)
                 }
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
                         userName = tempName
                         showingNameEditor = false
                     }
                     .fontWeight(.semibold)
+                    .foregroundStyle(primaryText)
                 }
             }
         }
@@ -893,10 +944,23 @@ struct SettingsView: View {
     // --------------------------------------------------------
     private var appearanceDescription: String {
         switch selectedScheme {
-        case .light:  return "App always uses light mode"
-        case .dark:   return "App always uses dark mode"
-        case .system: return "Follows your iPhone's appearance"
+        case .light:
+            return "App always uses light mode"
+        case .dark:
+            return "App always uses dark mode"
+        case .system:
+            return "Follows your iPhone's appearance"
         }
+    }
+
+    private var activeWidgetCandidateGoals: [Goal] {
+        settingsGoals.filter { $0.isActive }
+    }
+
+    private var selectedWidgetGoalIDs: [UUID] {
+        widgetGoalIDsRaw
+            .split(separator: ",")
+            .compactMap { UUID(uuidString: String($0)) }
     }
 
     // --------------------------------------------------------
@@ -906,15 +970,21 @@ struct SettingsView: View {
         if newValue {
             Task {
                 await notificationService.checkAuthorizationStatus()
+
                 if notificationService.isAuthorized {
                     isDailyReminderEnabled = true
+
                     await notificationService
                         .scheduleDailyReminder(hour: reminderHour)
                 } else {
                     let granted = await notificationService
                         .requestPermission()
+
                     if granted {
-                        await MainActor.run { isDailyReminderEnabled = true }
+                        await MainActor.run {
+                            isDailyReminderEnabled = true
+                        }
+
                         await notificationService
                             .scheduleDailyReminder(hour: reminderHour)
                     } else {
@@ -941,6 +1011,7 @@ struct SettingsView: View {
 
             Task {
                 let granted = await healthKitService.requestAuthorization()
+
                 await MainActor.run {
                     isHealthSyncEnabled = granted
                     showingHealthPermissionAlert = !granted
@@ -956,9 +1027,11 @@ struct SettingsView: View {
             let allEntries = try modelContext.fetch(
                 FetchDescriptor<JournalEntry>()
             )
+
             for entry in allEntries {
                 modelContext.delete(entry)
             }
+
             try modelContext.save()
             showingDataClearedConfirmation = true
         } catch {
@@ -968,17 +1041,26 @@ struct SettingsView: View {
 
     private func deleteAccountAndAllData() {
         do {
-            let allEntries = try modelContext.fetch(FetchDescriptor<JournalEntry>())
+            let allEntries = try modelContext.fetch(
+                FetchDescriptor<JournalEntry>()
+            )
+
             for entry in allEntries {
                 modelContext.delete(entry)
             }
 
-            let allGoals = try modelContext.fetch(FetchDescriptor<Goal>())
+            let allGoals = try modelContext.fetch(
+                FetchDescriptor<Goal>()
+            )
+
             for goal in allGoals {
                 modelContext.delete(goal)
             }
 
-            let allCompletions = try modelContext.fetch(FetchDescriptor<GoalCompletion>())
+            let allCompletions = try modelContext.fetch(
+                FetchDescriptor<GoalCompletion>()
+            )
+
             for completion in allCompletions {
                 modelContext.delete(completion)
             }
@@ -1017,6 +1099,7 @@ struct SettingsView: View {
         for key in keys {
             UserDefaults.standard.removeObject(forKey: key)
         }
+
         UserDefaults(suiteName: "group.com.pratik.MindSnap")?
             .removeObject(forKey: "widgetGoalIDs")
 
@@ -1027,21 +1110,13 @@ struct SettingsView: View {
         reminderHour = 20
         userName = ""
         appColorScheme = AppColorScheme.system.rawValue
+
         UserPoints.reset()
-    }
-
-    private var activeWidgetCandidateGoals: [Goal] {
-        settingsGoals.filter { $0.isActive }
-    }
-
-    private var selectedWidgetGoalIDs: [UUID] {
-        widgetGoalIDsRaw
-            .split(separator: ",")
-            .compactMap { UUID(uuidString: String($0)) }
     }
 
     private func toggleWidgetGoal(_ goal: Goal) {
         var selected = selectedWidgetGoalIDs
+
         if selected.contains(goal.id) {
             selected.removeAll { $0 == goal.id }
         } else {
@@ -1050,10 +1125,12 @@ struct SettingsView: View {
         }
 
         let activeIDs = Set(activeWidgetCandidateGoals.map(\.id))
+
         widgetGoalIDsRaw = selected
             .filter { activeIDs.contains($0) }
             .map(\.uuidString)
             .joined(separator: ",")
+
         WidgetCenter.shared.reloadAllTimelines()
     }
 
@@ -1067,9 +1144,11 @@ struct SettingsView: View {
     private func hourLabel(for hour: Int) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:00 a"
+
         var components = DateComponents()
         components.hour = hour
         components.minute = 0
+
         let date = Calendar.current.date(from: components) ?? Date()
         return formatter.string(from: date)
     }
@@ -1082,13 +1161,27 @@ struct SettingsView: View {
     NavigationStack {
         SettingsView()
     }
-    .modelContainer(for: [JournalEntry.self, Goal.self], inMemory: true)
+    .modelContainer(
+        for: [
+            JournalEntry.self,
+            Goal.self,
+            GoalCompletion.self
+        ],
+        inMemory: true
+    )
 }
 
 #Preview("Dark Mode") {
     NavigationStack {
         SettingsView()
     }
-    .modelContainer(for: [JournalEntry.self, Goal.self], inMemory: true)
+    .modelContainer(
+        for: [
+            JournalEntry.self,
+            Goal.self,
+            GoalCompletion.self
+        ],
+        inMemory: true
+    )
     .preferredColorScheme(.dark)
 }

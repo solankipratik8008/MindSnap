@@ -465,7 +465,20 @@ struct GoalRowView: View {
             .padding(7)
             .background(
                 Circle()
-                    .fill(Color(.systemGray5).opacity(colorScheme == .dark ? 0.25 : 0.8))
+                    .fill(
+                        colorScheme == .dark
+                        ? Color.white.opacity(0.07)
+                        : Color.black.opacity(0.045)
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                colorScheme == .dark
+                                ? Color.white.opacity(0.08)
+                                : Color.black.opacity(0.06),
+                                lineWidth: 1
+                            )
+                    )
             )
     }
 
@@ -656,36 +669,51 @@ struct GoalRowView: View {
             RoundedRectangle(cornerRadius: 22)
                 .fill(
                     colorScheme == .dark
-                    ? Color(red: 0.15, green: 0.15, blue: 0.17)
+                    ? Color(red: 0.09, green: 0.09, blue: 0.10)
                     : Color.white
                 )
 
-            LinearGradient(
-                colors: [
-                    goal.color.opacity(colorScheme == .dark ? 0.10 : 0.035),
-                    Color(red: 0.88, green: 0.12, blue: 0.68)
-                        .opacity(colorScheme == .dark ? 0.05 : 0.025),
-                    Color.clear
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 22))
+            if !isTomorrowPreview {
+                LinearGradient(
+                    colors: [
+                        goal.color.opacity(colorScheme == .dark ? 0.08 : 0.035),
+                        Color.clear
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 22))
+            }
+
+            if isCompleted && !isTomorrowPreview {
+                RoundedRectangle(cornerRadius: 22)
+                    .fill(
+                        goal.color.opacity(
+                            colorScheme == .dark ? 0.06 : 0.035
+                        )
+                    )
+            }
         }
     }
 
     private var compactCardBorderColor: Color {
+        if isTomorrowPreview {
+            return colorScheme == .dark
+            ? Color.white.opacity(0.05)
+            : Color.black.opacity(0.04)
+        }
+
         if isCompleted {
-            return goal.color.opacity(colorScheme == .dark ? 0.25 : 0.14)
+            return goal.color.opacity(colorScheme == .dark ? 0.28 : 0.18)
         }
 
         if goal.priority == .high {
-            return Color.red.opacity(colorScheme == .dark ? 0.22 : 0.16)
+            return Color.red.opacity(colorScheme == .dark ? 0.25 : 0.18)
         }
 
         return colorScheme == .dark
-            ? Color.white.opacity(0.07)
-            : Color.black.opacity(0.045)
+        ? Color.white.opacity(0.08)
+        : Color.black.opacity(0.07)
     }
 
     // --------------------------------------------------------
@@ -695,25 +723,25 @@ struct GoalRowView: View {
         HStack(spacing: 6) {
             Image(systemName: goal.priority.icon)
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(goal.priority.color.opacity(0.85))
+                .foregroundStyle(goal.priority.color.opacity(0.9))
 
             Text("\(goal.priority.emoji) \(goal.priority.displayName) Priority")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(goal.priority.color.opacity(0.85))
+                .foregroundStyle(goal.priority.color.opacity(0.9))
 
             Spacer()
 
             if goal.activityType == .medicine {
                 Text("💊 Reminder")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(goal.priority.color.opacity(0.75))
+                    .foregroundStyle(goal.priority.color.opacity(0.8))
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 5)
+        .padding(.vertical, 6)
         .background(
             goal.priority.color.opacity(
-                colorScheme == .dark ? 0.10 : 0.045
+                colorScheme == .dark ? 0.12 : 0.065
             )
         )
     }
@@ -724,18 +752,19 @@ struct GoalRowView: View {
     private var lockedWarningToast: some View {
         HStack(spacing: 8) {
             Image(systemName: "lock.fill")
-                .foregroundStyle(.white)
+                .foregroundStyle(colorScheme == .dark ? .black : .white)
                 .font(.caption)
-            Text("Completed — editing locked ✅")
+
+            Text("Completed — editing locked")
                 .font(.caption)
                 .fontWeight(.semibold)
-                .foregroundStyle(.white)
+                .foregroundStyle(colorScheme == .dark ? .black : .white)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .background(
             Capsule()
-                .fill(Color.green.opacity(0.9))
+                .fill(colorScheme == .dark ? Color.white : Color.black)
         )
         .frame(maxWidth: .infinity, alignment: .center)
         .allowsHitTesting(false)
@@ -779,15 +808,29 @@ struct GoalRowView: View {
             Image(systemName: "moon.stars.fill")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
             Text("Tomorrow")
-                .font(.system(size: 9))
+                .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(Color(.systemGray5))
+                .fill(
+                    colorScheme == .dark
+                    ? Color.white.opacity(0.07)
+                    : Color.black.opacity(0.045)
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            colorScheme == .dark
+                            ? Color.white.opacity(0.08)
+                            : Color.black.opacity(0.06),
+                            lineWidth: 1
+                        )
+                )
         )
     }
 
@@ -1604,15 +1647,15 @@ struct GoalRowView: View {
             RoundedRectangle(cornerRadius: 22)
                 .fill(
                     colorScheme == .dark
-                    ? Color(red: 0.15, green: 0.15, blue: 0.17)
+                    ? Color(red: 0.09, green: 0.09, blue: 0.10)
                     : Color.white
                 )
 
             if !isTomorrowPreview {
                 LinearGradient(
                     colors: [
-                        goal.color.opacity(colorScheme == .dark ? 0.10 : 0.035),
-                        goal.secondaryColor.opacity(colorScheme == .dark ? 0.06 : 0.02),
+                        goal.color.opacity(colorScheme == .dark ? 0.08 : 0.035),
+                        goal.secondaryColor.opacity(colorScheme == .dark ? 0.04 : 0.018),
                         Color.clear
                     ],
                     startPoint: .topLeading,
@@ -1620,29 +1663,36 @@ struct GoalRowView: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 22))
             }
+
+            if isCompleted && !isTomorrowPreview {
+                RoundedRectangle(cornerRadius: 22)
+                    .fill(goal.color.opacity(colorScheme == .dark ? 0.055 : 0.03))
+            }
         }
     }
 
     private var cardBorderColor: Color {
         if isTomorrowPreview {
-            return Color.clear
+            return colorScheme == .dark
+            ? Color.white.opacity(0.05)
+            : Color.black.opacity(0.04)
         }
 
         if isCompleted {
-            return goal.color.opacity(colorScheme == .dark ? 0.24 : 0.14)
+            return goal.color.opacity(colorScheme == .dark ? 0.28 : 0.18)
         }
 
         if goal.priority == .high {
-            return goal.priority.color.opacity(colorScheme == .dark ? 0.22 : 0.16)
+            return goal.priority.color.opacity(colorScheme == .dark ? 0.26 : 0.18)
         }
 
         if isExpiring {
-            return Color.orange.opacity(colorScheme == .dark ? 0.22 : 0.16)
+            return Color.orange.opacity(colorScheme == .dark ? 0.26 : 0.18)
         }
 
         return colorScheme == .dark
-            ? Color.white.opacity(0.07)
-            : Color.black.opacity(0.045)
+        ? Color.white.opacity(0.08)
+        : Color.black.opacity(0.07)
     }
 
     private var cardShadowColor: Color {
@@ -1651,14 +1701,14 @@ struct GoalRowView: View {
         }
 
         if isCompleted {
-            return goal.color.opacity(0.06)
+            return goal.color.opacity(0.08)
         }
 
         if goal.priority == .high {
-            return goal.priority.color.opacity(0.07)
+            return goal.priority.color.opacity(0.08)
         }
 
-        return Color.black.opacity(0.045)
+        return Color.black.opacity(0.055)
     }
 
     // --------------------------------------------------------
@@ -1958,8 +2008,7 @@ struct GoalRowView: View {
         }
         .padding(16)
     }
-    .background(Color(.systemGroupedBackground))
-    .modelContainer(container)
+    .background(Color(red: 0.96, green: 0.96, blue: 0.97))    .modelContainer(container)
 }
 
 #Preview("Dark") {
@@ -1988,7 +2037,6 @@ struct GoalRowView: View {
         viewModel: vm
     )
     .padding(16)
-    .background(Color(.systemGroupedBackground))
-    .preferredColorScheme(.dark)
+    .background(Color(red: 0.03, green: 0.03, blue: 0.035))    .preferredColorScheme(.dark)
     .modelContainer(container)
 }

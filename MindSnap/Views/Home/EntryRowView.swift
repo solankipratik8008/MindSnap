@@ -6,12 +6,19 @@
 //
 // ============================================================
 // EntryRowView.swift
-// MindSnap — UPDATED WITH PIN BADGE
+// MindSnap — PREMIUM MONOCHROME JOURNAL CARD
 //
-// WHAT CHANGED:
-// Added pin indicator to mood banner when entry is pinned.
-// Shows a pin icon next to the date in the banner.
-// Dark mode adaptive colors maintained.
+// UI UPDATE:
+// 1. Black/white premium card style
+// 2. Subtle mood accent, not full colorful branding
+// 3. Cleaner pinned badge
+// 4. Better light/dark mode contrast
+//
+// FUNCTIONALITY KEPT:
+// 1. Shows journal preview
+// 2. Shows mood, date, sentiment, tags
+// 3. Shows pinned state
+// 4. No save/edit/delete/sync logic touched
 // ============================================================
 
 import SwiftUI
@@ -21,30 +28,85 @@ struct EntryRowView: View {
 
     let entry: JournalEntry
     @Environment(\.colorScheme) private var colorScheme
-    private var brandPrimary: Color {
-        Color(red: 0.50, green: 0.12, blue: 0.85)
+
+    // --------------------------------------------------------
+    // MARK: - Premium Theme
+    // --------------------------------------------------------
+    private var cardBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.09, green: 0.09, blue: 0.10)
+        : Color.white
     }
 
-    private var bannerPrimaryTextColor: Color {
-        colorScheme == .dark ? .white : Color.black.opacity(0.82)
+    private var cardBodyBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.10, green: 0.10, blue: 0.11)
+        : Color.white
     }
 
-    private var bannerSecondaryTextColor: Color {
-        colorScheme == .dark ? Color.white.opacity(0.78) : Color.black.opacity(0.55)
-    }
-    private var brandSecondary: Color {
-        Color(red: 0.88, green: 0.12, blue: 0.68)
+    private var bannerBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.13, green: 0.13, blue: 0.14)
+        : Color(red: 0.965, green: 0.965, blue: 0.972)
     }
 
-    private var brandAccent: Color {
-        Color(red: 0.10, green: 0.78, blue: 0.85)
+    private var primaryText: Color {
+        colorScheme == .dark
+        ? Color.white
+        : Color(red: 0.05, green: 0.05, blue: 0.055)
+    }
+
+    private var secondaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.62)
+        : Color.black.opacity(0.52)
+    }
+
+    private var tertiaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.38)
+        : Color.black.opacity(0.34)
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.08)
+        : Color.black.opacity(0.07)
+    }
+
+    private var softBorderColor: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.06)
+        : Color.black.opacity(0.045)
+    }
+
+    private var moodAccent: Color {
+        entry.moodType.color
+    }
+
+    private var shadowColor: Color {
+        colorScheme == .dark
+        ? Color.clear
+        : Color.black.opacity(0.055)
+    }
+
+    private var pinBadgeBackground: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.11)
+        : Color.black.opacity(0.055)
+    }
+
+    private var chipBackground: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.07)
+        : Color.black.opacity(0.045)
     }
 
     var body: some View {
         VStack(spacing: 0) {
 
             // ================================================
-            // MOOD GRADIENT BANNER
+            // MOOD BANNER
             // ================================================
             moodBanner
 
@@ -54,166 +116,165 @@ struct EntryRowView: View {
             cardBody
         }
         .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(
-                    colorScheme == .dark
-                    ? Color(red: 0.15, green: 0.15, blue: 0.17)
-                    : Color.white
-                )
+            RoundedRectangle(cornerRadius: 20)
+                .fill(cardBackground)
                 .shadow(
-                    color: colorScheme == .dark
-                    ? Color.clear
-                    : brandPrimary.opacity(0.055),
-                    radius: 10,
+                    color: shadowColor,
+                    radius: 14,
                     x: 0,
-                    y: 5
+                    y: 7
                 )
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(
-                    entry.moodType.color.opacity(
-                        colorScheme == .dark ? 0.22 : 0.10
-                    ),
-                    lineWidth: 1
-                )
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(borderColor, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: 20))
     }
 
     // --------------------------------------------------------
     // MARK: - Mood Banner
-    //
-    // The colored gradient cover at top of card.
-    // UPDATED: Shows pin icon when entry is pinned.
     // --------------------------------------------------------
     private var moodBanner: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    entry.moodType.color.opacity(colorScheme == .dark ? 0.30 : 0.26),
-                    brandAccent.opacity(colorScheme == .dark ? 0.18 : 0.12),
-                    brandPrimary.opacity(colorScheme == .dark ? 0.16 : 0.09)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            // Clean premium highlight instead of large background bubbles
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(colorScheme == .dark ? 0.06 : 0.14),
-                    Color.white.opacity(0.02),
-                    Color.clear
-                ],
-                startPoint: .topTrailing,
-                endPoint: .bottomLeading
-            )
+            bannerBase
 
             HStack(spacing: 12) {
-                Text(entry.moodType.emoji)
-                    .font(.system(size: 23))
-                    .frame(width: 36, height: 36)
-                    .background(
-                        Circle()
-                            .fill(Color.white.opacity(colorScheme == .dark ? 0.10 : 0.18))
-                    )
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.16), lineWidth: 1)
-                    )
-                    .shadow(
-                        color: .black.opacity(colorScheme == .dark ? 0.10 : 0.06),
-                        radius: 3,
-                        x: 0,
-                        y: 1
-                    )
+                moodIcon
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("Feeling \(entry.moodType.displayName)")
                         .font(.subheadline)
                         .fontWeight(.bold)
-                        .foregroundStyle(bannerPrimaryTextColor)
+                        .foregroundStyle(primaryText)
                         .lineLimit(1)
 
                     Text(timeOfDayLabel)
                         .font(.caption2)
-                        .foregroundStyle(bannerSecondaryTextColor)
+                        .fontWeight(.medium)
+                        .foregroundStyle(secondaryText)
                         .lineLimit(1)
                 }
 
-                Spacer()
+                Spacer(minLength: 10)
 
-                VStack(alignment: .trailing, spacing: 4) {
+                VStack(alignment: .trailing, spacing: 5) {
                     if entry.isPinned {
-                        HStack(spacing: 3) {
-                            Image(systemName: "pin.fill")
-                                .font(.caption2)
-                                .foregroundStyle(
-                                    colorScheme == .dark
-                                        ? Color.white.opacity(0.88)
-                                        : brandSecondary
-                                )
-                                .rotationEffect(.degrees(45))
-
-                            Text("Pinned")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(
-                                    colorScheme == .dark
-                                        ? Color.white.opacity(0.88)
-                                        : brandSecondary
-                                )
-                        }
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(
-                            Capsule()
-                                .fill(
-                                    colorScheme == .dark
-                                        ? Color.white.opacity(0.14)
-                                        : Color.white.opacity(0.72)
-                                )
-                                .overlay(
-                                    Capsule()
-                                        .stroke(
-                                            brandSecondary.opacity(colorScheme == .dark ? 0.18 : 0.22),
-                                            lineWidth: 1
-                                        )
-                                )
-                        )
+                        pinnedBadge
                     }
 
                     Text(entry.shortDate)
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundStyle(bannerPrimaryTextColor)
+                        .foregroundStyle(primaryText)
 
-                    Text(String(format: "%+.2f", entry.sentimentScore))
-                        .font(.caption2)
-                        .foregroundStyle(bannerSecondaryTextColor)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(Color.white.opacity(colorScheme == .dark ? 0.13 : 0.28))
-                        )
+                    sentimentBadge
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.vertical, 11)
         }
-        .frame(height: entry.isPinned ? 82 : 66)
+        .frame(height: entry.isPinned ? 84 : 68)
+    }
+
+    private var bannerBase: some View {
+        ZStack {
+            bannerBackground
+
+            LinearGradient(
+                colors: [
+                    moodAccent.opacity(colorScheme == .dark ? 0.18 : 0.10),
+                    Color.clear,
+                    Color.clear
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            LinearGradient(
+                colors: [
+                    Color.white.opacity(colorScheme == .dark ? 0.035 : 0.40),
+                    Color.clear
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+    }
+
+    private var moodIcon: some View {
+        ZStack {
+            Circle()
+                .fill(cardBackground)
+                .frame(width: 40, height: 40)
+                .overlay(
+                    Circle()
+                        .stroke(
+                            moodAccent.opacity(colorScheme == .dark ? 0.34 : 0.24),
+                            lineWidth: 1.2
+                        )
+                )
+
+            Text(entry.moodType.emoji)
+                .font(.system(size: 23))
+        }
+        .shadow(
+            color: shadowColor,
+            radius: 5,
+            x: 0,
+            y: 3
+        )
+    }
+
+    private var pinnedBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "pin.fill")
+                .font(.caption2)
+                .rotationEffect(.degrees(45))
+
+            Text("Pinned")
+                .font(.caption2)
+                .fontWeight(.semibold)
+        }
+        .foregroundStyle(primaryText)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(pinBadgeBackground)
+                .overlay(
+                    Capsule()
+                        .stroke(softBorderColor, lineWidth: 1)
+                )
+        )
+    }
+
+    private var sentimentBadge: some View {
+        Text(String(format: "%+.2f", entry.sentimentScore))
+            .font(.caption2)
+            .fontWeight(.medium)
+            .foregroundStyle(secondaryText)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(
+                Capsule()
+                    .fill(chipBackground)
+                    .overlay(
+                        Capsule()
+                            .stroke(softBorderColor, lineWidth: 1)
+                    )
+            )
     }
 
     // --------------------------------------------------------
     // MARK: - Card Body
     // --------------------------------------------------------
     private var cardBody: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(entry.previewText)
                 .font(.subheadline)
-                .foregroundStyle(.primary)
+                .fontWeight(.regular)
+                .foregroundStyle(primaryText)
                 .lineLimit(2)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -222,10 +283,11 @@ struct EntryRowView: View {
                 tagsRow
             }
 
-            HStack {
+            HStack(spacing: 8) {
                 Text(entry.formattedDate)
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(tertiaryText)
+                    .lineLimit(1)
 
                 Spacer()
 
@@ -233,22 +295,25 @@ struct EntryRowView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "tag.fill")
                             .font(.caption2)
-                            .foregroundStyle(entry.moodType.color.opacity(0.85))
+                            .foregroundStyle(secondaryText)
 
                         Text("\(entry.tags.count) tags")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .fontWeight(.medium)
+                            .foregroundStyle(secondaryText)
                     }
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule()
+                            .fill(chipBackground)
+                    )
                 }
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(
-            colorScheme == .dark
-            ? Color(red: 0.14, green: 0.14, blue: 0.16)
-            : Color.white
-        )
+        .padding(.vertical, 13)
+        .background(cardBodyBackground)
     }
 
     // --------------------------------------------------------
@@ -261,15 +326,20 @@ struct EntryRowView: View {
                     Text(tag)
                         .font(.caption2)
                         .fontWeight(.medium)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
+                        .foregroundStyle(secondaryText)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
                         .background(
                             Capsule()
-                                .fill(
-                                    entry.moodType.color.opacity(
-                                        colorScheme == .dark ? 0.13 : 0.08
-                                    )
+                                .fill(chipBackground)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(
+                                            moodAccent.opacity(
+                                                colorScheme == .dark ? 0.14 : 0.10
+                                            ),
+                                            lineWidth: 1
+                                        )
                                 )
                         )
                 }
@@ -326,7 +396,7 @@ struct EntryRowView: View {
         }
         .padding(.vertical, 16)
     }
-    .background(Color(.systemGroupedBackground))
+    .background(Color(red: 0.96, green: 0.96, blue: 0.97))
     .modelContainer(for: JournalEntry.self, inMemory: true)
 }
 
@@ -352,7 +422,7 @@ struct EntryRowView: View {
         }
         .padding(.vertical, 16)
     }
-    .background(Color(.systemGroupedBackground))
+    .background(Color(red: 0.03, green: 0.03, blue: 0.035))
     .preferredColorScheme(.dark)
     .modelContainer(for: JournalEntry.self, inMemory: true)
 }

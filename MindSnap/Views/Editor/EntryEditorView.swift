@@ -1,19 +1,25 @@
-
 // EntryEditorView.swift
 // MindSnap — RICH TEXT EDITOR
 //
 // ============================================================
 // EntryEditorView.swift
-// MindSnap — RICH TEXT TOOLBAR FIXED
+// MindSnap — PREMIUM MONOCHROME EDITOR
 //
-// CRITICAL FIX:
-// Toolbar is now injected directly into UITextView
-// via inputAccessoryView. This is the ONLY reliable
-// way to show a formatting toolbar above the keyboard
-// on real iPhone devices.
+// UI UPDATE:
+// 1. Professional black/white editor theme
+// 2. Custom safe top bar to prevent Cancel/Save overlap
+// 3. Focus writing mode
+// 4. First-time coach mark for Focus mode
+// 5. Subtle moving pencil animation while typing
 //
-// ToolbarItemGroup(placement: .keyboard) does NOT work
-// reliably with UIViewRepresentable on real devices.
+// FUNCTIONALITY KEPT:
+// 1. Rich text editor
+// 2. Formatting toolbar through inputAccessoryView
+// 3. Voice journaling
+// 4. Image picker
+// 5. Mood detection / override
+// 6. Tags / emojis
+// 7. Save / update journal logic
 // ============================================================
 
 import SwiftUI
@@ -32,21 +38,17 @@ enum FormattingAction {
 
 // ============================================================
 // RichTextEditor
-//
-// UIViewRepresentable wrapping UITextView.
-// inputAccessoryView handles the toolbar — works on
-// ALL real devices reliably.
 // ============================================================
 struct RichTextEditor: UIViewRepresentable {
 
     @Binding var attributedText: NSAttributedString
     @Binding var selectedRange: NSRange
+    @Binding var caretRect: CGRect
+    @Binding var isEditorFocused: Bool
+
     var onTextChange: (NSAttributedString) -> Void
     var onFormattingAction: (FormattingAction) -> Void
 
-    // --------------------------------------------------------
-    // Coordinator
-    // --------------------------------------------------------
     class Coordinator: NSObject, UITextViewDelegate {
         var parent: RichTextEditor
         weak var textView: UITextView?
@@ -55,21 +57,42 @@ struct RichTextEditor: UIViewRepresentable {
             self.parent = parent
         }
 
+        private func updateCaretRect(_ tv: UITextView) {
+            guard let selectedRange = tv.selectedTextRange else {
+                parent.caretRect = .zero
+                return
+            }
+
+            let rect = tv.caretRect(for: selectedRange.end)
+            parent.caretRect = rect
+        }
+
         func textViewDidChange(_ tv: UITextView) {
             parent.attributedText = tv.attributedText
             parent.selectedRange = tv.selectedRange
             parent.onTextChange(tv.attributedText)
+            updateCaretRect(tv)
         }
 
         func textViewDidChangeSelection(_ tv: UITextView) {
             parent.selectedRange = tv.selectedRange
+            updateCaretRect(tv)
         }
 
-        // ---- Toolbar button tapped ----
+        func textViewDidBeginEditing(_ tv: UITextView) {
+            parent.isEditorFocused = true
+            updateCaretRect(tv)
+        }
+
+        func textViewDidEndEditing(_ tv: UITextView) {
+            parent.isEditorFocused = false
+            parent.caretRect = .zero
+        }
+
         @objc func toolbarButtonTapped(_ sender: UIButton) {
-            guard let action = FormattingAction.from(
-                tag: sender.tag
-            ) else { return }
+            guard let action = FormattingAction.from(tag: sender.tag) else {
+                return
+            }
             parent.onFormattingAction(action)
         }
     }
@@ -83,20 +106,35 @@ struct RichTextEditor: UIViewRepresentable {
         tv.delegate = context.coordinator
         context.coordinator.textView = tv
 
-        // ---- Basic setup ----
         tv.isScrollEnabled = true
         tv.isEditable = true
         tv.isUserInteractionEnabled = true
         tv.backgroundColor = .clear
         tv.font = UIFont.preferredFont(forTextStyle: .body)
         tv.textColor = UIColor.label
+        tv.tintColor = UIColor.label
+        // Disable iOS writing suggestions/autocorrection for journaling
+        // Keep spelling correction, but avoid AutoFill/contact-style suggestions
+        tv.autocorrectionType = .no
+        tv.spellCheckingType = .yes
+
+        // Keep typing natural, avoid unwanted smart formatting changes
+        tv.smartQuotesType = .no
+        tv.smartDashesType = .no
+        tv.smartInsertDeleteType = .no
+
+        // Natural sentence capitalization
+        tv.autocapitalizationType = .sentences
+
+        // Prevent name/contact/password/autofill style suggestions
+        tv.textContentType = .none
         tv.textContainerInset = UIEdgeInsets(
-            top: 12, left: 8, bottom: 12, right: 8
+            top: 12,
+            left: 8,
+            bottom: 12,
+            right: 8
         )
 
-        // ---- TOOLBAR FIX ----
-        // Attach formatting toolbar as inputAccessoryView
-        // This shows reliably on ALL real iPhone devices
         tv.inputAccessoryView = makeToolbar(
             coordinator: context.coordinator
         )
@@ -111,26 +149,23 @@ struct RichTextEditor: UIViewRepresentable {
         if tv.attributedText != attributedText {
             let range = tv.selectedRange
             tv.attributedText = attributedText
+
             if range.location <= attributedText.length {
                 tv.selectedRange = range
             }
         }
     }
 
-    // --------------------------------------------------------
-    // makeToolbar — Creates the formatting toolbar
-    //
-    // This is attached as inputAccessoryView so it
-    // appears ABOVE the keyboard on every real device.
-    // --------------------------------------------------------
     private func makeToolbar(
         coordinator: Coordinator
     ) -> UIView {
         let toolbar = UIToolbar()
         toolbar.sizeToFit()
-        toolbar.tintColor = UIColor.systemPurple
+        toolbar.tintColor = UIColor.label
+        toolbar.barTintColor = UIColor.systemBackground
+        toolbar.backgroundColor = UIColor.systemBackground
+        toolbar.isTranslucent = false
 
-        // ---- Helper to make button ----
         func btn(
             icon: String,
             tag: Int,
@@ -145,7 +180,7 @@ struct RichTextEditor: UIViewRepresentable {
                 ),
                 for: .touchUpInside
             )
-            button.tintColor = UIColor.systemPurple
+            button.tintColor = UIColor.label
 
             let img = UIImage(systemName: icon)?
                 .withConfiguration(
@@ -156,15 +191,20 @@ struct RichTextEditor: UIViewRepresentable {
                 button.setImage(img, for: .normal)
             } else if let title = title {
                 button.setTitle(title, for: .normal)
-                button.titleLabel?.font =
-                    UIFont.systemFont(
-                        ofSize: 15, weight: .semibold
-                    )
+                button.setTitleColor(.label, for: .normal)
+                button.titleLabel?.font = UIFont.systemFont(
+                    ofSize: 16,
+                    weight: .bold
+                )
             }
 
             button.frame = CGRect(
-                x: 0, y: 0, width: title == nil ? 36 : 56, height: 36
+                x: 0,
+                y: 0,
+                width: title == nil ? 36 : 68,
+                height: 36
             )
+
             return UIBarButtonItem(customView: button)
         }
 
@@ -173,6 +213,7 @@ struct RichTextEditor: UIViewRepresentable {
             target: nil,
             action: nil
         )
+
         let fixed = UIBarButtonItem(
             barButtonSystemItem: .fixedSpace,
             target: nil,
@@ -180,49 +221,35 @@ struct RichTextEditor: UIViewRepresentable {
         )
         fixed.width = 4
 
-        let items: [UIBarButtonItem] = [
-            // Bold
+        toolbar.items = [
             btn(icon: "bold", tag: 0),
             fixed,
-            // Italic
             btn(icon: "italic", tag: 1),
             fixed,
-            // Underline
             btn(icon: "underline", tag: 2),
             fixed,
-            // Separator
-            UIBarButtonItem(
-                barButtonSystemItem: .fixedSpace,
-                target: nil, action: nil
-            ),
-            // Bullet list
             btn(icon: "list.bullet", tag: 3),
             fixed,
-            // Numbered list
             btn(icon: "list.number", tag: 4),
             fixed,
-            // Quote
             btn(icon: "text.quote", tag: 5),
             fixed,
-            // Table
             btn(icon: "tablecells", tag: 6),
             fixed,
-            // Photo
             btn(icon: "photo", tag: 7),
             fixed,
-            // Mic
             btn(icon: "mic", tag: 8),
             space,
-            // Dismiss keyboard
             btn(icon: "", tag: 9, title: "Done")
         ]
 
-        toolbar.items = items
         return toolbar
     }
 }
 
-// ---- Map tag → FormattingAction ----
+// ============================================================
+// FormattingAction mapping
+// ============================================================
 extension FormattingAction {
     static func from(tag: Int) -> FormattingAction? {
         switch tag {
@@ -260,47 +287,130 @@ struct EntryEditorView: View {
             .foregroundColor: UIColor.label
         ]
     )
-    @State private var selectedRange = NSRange(
-        location: 0, length: 0
-    )
+    @State private var selectedRange = NSRange(location: 0, length: 0)
     @State private var plainText = ""
 
     // ---- Image picker ----
     @State private var showingImagePicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
 
-    // ---- Other state ----
+    // ---- Editor state ----
     @State private var selectedTags: [String] = []
     @State private var selectedPrompt: String? = nil
     @State private var showingPrompts = false
     @State private var showingTagSelector = false
     @State private var isFocusMode = false
+
+    // ---- Mood state ----
     @State private var userSelectedMood: MoodType = .neutral
     @State private var aiDetectedMood: MoodType = .neutral
     @State private var userHasOverridden = false
     @State private var showingMoodCheckIn = false
 
+    // ---- Speech ----
     @State private var speechService = SpeechService()
     @State private var showingSpeechError = false
     @State private var lastSpeechTranscript = ""
 
+    // ---- Writing animation ----
+    @State private var showingWritingIndicator = false
+    @State private var typingHideTask: DispatchWorkItem?
+    @State private var caretRect: CGRect = .zero
+    @State private var isEditorFocused = false
+    @State private var pencilPosition: CGPoint = .zero
+    @State private var lastCaretPosition: CGPoint = .zero
+    @State private var pencilMovingForward = true
+    @State private var pencilStrokePhase = false
+
+    // ---- Coach mark ----
+    @AppStorage("hasSeenJournalFullscreenCoachMark")
+    private var hasSeenJournalFullscreenCoachMark = false
+    @State private var showJournalFullscreenCoachMark = false
+
     private let sentimentService = SentimentService()
     private var isEditMode: Bool { existingEntry != nil }
+
+    private var canSave: Bool {
+        !plainText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     private var finalMood: MoodType {
         userHasOverridden ? userSelectedMood : aiDetectedMood
     }
 
+    // --------------------------------------------------------
+    // MARK: - Theme
+    // --------------------------------------------------------
+    private var appBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.03, green: 0.03, blue: 0.035)
+        : Color(red: 0.96, green: 0.96, blue: 0.97)
+    }
+
     private var cardBackground: Color {
         colorScheme == .dark
-            ? Color(red: 0.17, green: 0.17, blue: 0.18)
-            : Color(.systemBackground)
+        ? Color(red: 0.09, green: 0.09, blue: 0.10)
+        : Color.white
     }
 
     private var editorBackground: Color {
         colorScheme == .dark
-            ? Color(red: 0.13, green: 0.13, blue: 0.14)
-            : Color(.systemGray6)
+        ? Color(red: 0.12, green: 0.12, blue: 0.13)
+        : Color(red: 0.985, green: 0.985, blue: 0.99)
+    }
+
+    private var primaryText: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var secondaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.62)
+        : Color.black.opacity(0.52)
+    }
+
+    private var tertiaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.38)
+        : Color.black.opacity(0.34)
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.08)
+        : Color.black.opacity(0.07)
+    }
+
+    private var chipBackground: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.07)
+        : Color.black.opacity(0.055)
+    }
+
+    private var primaryButtonBackground: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var primaryButtonText: Color {
+        colorScheme == .dark ? .black : .white
+    }
+
+    private var selectedSoftBackground: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.10)
+        : Color.black.opacity(0.055)
+    }
+
+    private var shadowColor: Color {
+        colorScheme == .dark
+        ? Color.clear
+        : Color.black.opacity(0.06)
+    }
+
+    private var disabledButtonBackground: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.08)
+        : Color.black.opacity(0.055)
     }
 
     private let availableTags = [
@@ -310,16 +420,18 @@ struct EntryEditorView: View {
     ]
 
     private let moodEmojis = [
-        "😊","😢","😰","😌","😐",
-        "😤","😔","🥰","😅","😴"
+        "😊", "😢", "😰", "😌", "😐",
+        "😤", "😔", "🥰", "😅", "😴"
     ]
+
     private let activityEmojis = [
-        "🏃","🍕","☕️","📚","🎵",
-        "🎮","🌙","🌅","💪","🧘"
+        "🏃", "🍕", "☕️", "📚", "🎵",
+        "🎮", "🌙", "🌅", "💪", "🧘"
     ]
+
     private let feelingEmojis = [
-        "❤️","🔥","⭐️","✨","💭",
-        "🙏","💡","🌈","🎯","💫"
+        "❤️", "🔥", "⭐️", "✨", "💭",
+        "🙏", "💡", "🌈", "🎯", "💫"
     ]
 
     // --------------------------------------------------------
@@ -328,112 +440,41 @@ struct EntryEditorView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(.systemGroupedBackground)
+                appBackground
                     .ignoresSafeArea()
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-
-                        // ---- Mood Banner ----
-                        smartMoodBanner
-                            .padding(.horizontal, 16)
-
-                        // ---- Rich Text Editor ----
-                        richTextEditorSection
-                            .padding(.horizontal, 16)
-
-                        // ---- Recording Banner ----
-                        if speechService.isRecording {
-                            recordingBanner
-                                .padding(.horizontal, 16)
-                        }
-
-                        if !isFocusMode {
-                            reflectionPromptsSection
-                                .padding(.horizontal, 16)
-
-                            tagAndEmojiSection
-                                .padding(.horizontal, 16)
-
-                            if !selectedTags.isEmpty {
-                                selectedTagsDisplay
-                                    .padding(.horizontal, 16)
-                            }
-
-                            moodOverrideBar
-                                .padding(.horizontal, 16)
-                        }
-
-                        Spacer(minLength: 40)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        dismissKeyboard()
                     }
-                    .padding(.top, 8)
+
+                if isFocusMode {
+                    focusModeContent
+                } else {
+                    normalEditorContent
+                }
+
+                if showJournalFullscreenCoachMark {
+                    journalFullscreenCoachMarkOverlay
+                        .transition(.opacity)
+                        .zIndex(20)
                 }
             }
-            .navigationTitle(
-                isEditMode ? "Edit Entry" : "New Entry"
-            )
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(
-                    placement: .navigationBarLeading
-                ) {
-                    Button("Cancel") {
-                        if speechService.isRecording {
-                            speechService.stopRecording()
-                        }
-                        dismiss()
-                    }
-                    .foregroundStyle(.secondary)
-                }
-
-                ToolbarItem(
-                    placement: .navigationBarTrailing
-                ) {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isFocusMode.toggle()
-                            if isFocusMode {
-                                showingPrompts = false
-                                showingTagSelector = false
-                            }
-                        }
-                    } label: {
-                        Image(
-                            systemName: isFocusMode
-                                ? "arrow.down.right.and.arrow.up.left"
-                                : "arrow.up.left.and.arrow.down.right"
-                        )
-                    }
-                    .foregroundStyle(.purple)
-                }
-
-                ToolbarItem(
-                    placement: .navigationBarTrailing
-                ) {
-                    Button(isEditMode ? "Update" : "Save") {
-                        saveEntry()
-                    }
-                    .disabled(plainText.isEmpty)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(
-                        plainText.isEmpty
-                            ? Color.secondary : Color.purple
-                    )
-                }
+            .toolbar(.hidden, for: .navigationBar)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                entryTopBar
             }
-            .scrollDismissesKeyboard(.interactively)
             .alert(
                 "Microphone Error",
                 isPresented: $showingSpeechError
             ) {
                 Button("Open Settings") {
                     if let url = URL(
-                        string: UIApplication
-                            .openSettingsURLString
+                        string: UIApplication.openSettingsURLString
                     ) {
                         UIApplication.shared.open(url)
                     }
                 }
+
                 Button("OK", role: .cancel) { }
             } message: {
                 Text(
@@ -460,12 +501,16 @@ struct EntryEditorView: View {
         .onAppear {
             if let entry = existingEntry {
                 loadExistingEntry(entry)
+                presentJournalFullscreenCoachMarkIfNeeded()
             } else {
-                DispatchQueue.main.asyncAfter(
-                    deadline: .now() + 0.3
-                ) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     showingMoodCheckIn = true
                 }
+            }
+        }
+        .onChange(of: showingMoodCheckIn) { _, isShowing in
+            if !isShowing {
+                presentJournalFullscreenCoachMarkIfNeeded()
             }
         }
         .onChange(of: plainText) { _, text in
@@ -478,103 +523,776 @@ struct EntryEditorView: View {
             appendSpeechDelta(text)
         }
         .onChange(of: speechService.errorMessage) { _, err in
-            if err != nil { showingSpeechError = true }
+            if err != nil {
+                showingSpeechError = true
+            }
         }
         .onDisappear {
+            typingHideTask?.cancel()
             speechService.cancelRecording()
         }
     }
 
     // --------------------------------------------------------
-    // MARK: - Rich Text Editor Section
+    // MARK: - Custom Top Bar
     // --------------------------------------------------------
-    private var richTextEditorSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+    private var entryTopBar: some View {
+        ZStack {
+            Text(isEditMode ? "Edit Entry" : "New Entry")
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundStyle(primaryText)
+                .lineLimit(1)
+
             HStack {
-                Text("What's on your mind?")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
+                Button {
+                    if speechService.isRecording {
+                        speechService.stopRecording()
+                    }
+                    dismiss()
+                } label: {
+                    Text("Cancel")
+                        .font(.headline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(secondaryText)
+                        .frame(width: 100, height: 48)
+                        .background(
+                            Capsule()
+                                .fill(cardBackground)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(borderColor, lineWidth: 1)
+                                )
+                                .shadow(
+                                    color: shadowColor,
+                                    radius: 10,
+                                    x: 0,
+                                    y: 5
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
 
                 Spacer()
 
-                // Voice button
+                Button {
+                    saveEntry()
+                } label: {
+                    Text(isEditMode ? "Update" : "Save")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(
+                            canSave ? primaryButtonText : secondaryText
+                        )
+                        .frame(width: 100, height: 48)
+                        .background(
+                            Capsule()
+                                .fill(
+                                    canSave
+                                    ? primaryButtonBackground
+                                    : disabledButtonBackground
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(
+                                            canSave ? Color.clear : borderColor,
+                                            lineWidth: 1
+                                        )
+                                )
+                                .shadow(
+                                    color: canSave ? shadowColor : Color.clear,
+                                    radius: 10,
+                                    x: 0,
+                                    y: 5
+                                )
+                        )
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSave)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 10)
+        .background(
+            appBackground
+                .opacity(0.96)
+                .ignoresSafeArea(edges: .top)
+        )
+    }
+
+    // --------------------------------------------------------
+    // MARK: - Normal Editor Content
+    // --------------------------------------------------------
+    private var normalEditorContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                smartMoodBanner
+                    .padding(.horizontal, 16)
+
+                richTextEditorSection
+                    .padding(.horizontal, 16)
+
+                if speechService.isRecording {
+                    recordingBanner
+                        .padding(.horizontal, 16)
+                }
+
+                reflectionPromptsSection
+                    .padding(.horizontal, 16)
+
+                tagAndEmojiSection
+                    .padding(.horizontal, 16)
+
+                if !selectedTags.isEmpty {
+                    selectedTagsDisplay
+                        .padding(.horizontal, 16)
+                }
+
+                moodOverrideBar
+                    .padding(.horizontal, 16)
+
+                Spacer(minLength: 40)
+            }
+            .padding(.top, 8)
+            .padding(.bottom, 24)
+        }
+        .scrollDismissesKeyboard(.interactively)
+    }
+
+    // --------------------------------------------------------
+    // MARK: - Focus Mode
+    // --------------------------------------------------------
+    private var focusModeContent: some View {
+        GeometryReader { geo in
+            let editorHeight = max(260, geo.size.height - 185)
+
+            VStack(spacing: 10) {
+
+                // ----------------------------------------------------
+                // Fixed focus mode control bar
+                // ----------------------------------------------------
+                HStack(spacing: 8) {
+                    Button {
+                        toggleFocusMode()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.down.right.and.arrow.up.left")
+                                .font(.caption)
+
+                            Text("Compact")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                        }
+                        .foregroundStyle(primaryText)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .background(
+                            Capsule()
+                                .fill(cardBackground)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(borderColor, lineWidth: 1)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    HStack(spacing: 6) {
+                        Text(finalMood.emoji)
+                            .font(.caption)
+
+                        Text(finalMood.displayName)
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundStyle(finalMood.color)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 9)
+                    .background(
+                        Capsule()
+                            .fill(cardBackground)
+                            .overlay(
+                                Capsule()
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
+                    )
+
+                    Spacer(minLength: 6)
+
+                    Button {
+                        dismissKeyboard()
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "keyboard.chevron.compact.down")
+                                .font(.caption)
+
+                            Text("Done")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                        }
+                        .foregroundStyle(primaryText)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 9)
+                        .background(
+                            Capsule()
+                                .fill(cardBackground)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(borderColor, lineWidth: 1)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        toggleSpeechRecording()
+                    } label: {
+                        Image(
+                            systemName: speechService.isRecording
+                            ? "stop.circle.fill"
+                            : "mic.circle.fill"
+                        )
+                        .font(.title3)
+                        .foregroundStyle(
+                            speechService.isRecording ? .red : primaryText
+                        )
+                        .frame(width: 38, height: 38)
+                        .background(
+                            Circle()
+                                .fill(cardBackground)
+                                .overlay(
+                                    Circle()
+                                        .stroke(borderColor, lineWidth: 1)
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+
+                if speechService.isRecording {
+                    recordingBanner
+                        .padding(.horizontal, 16)
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Write freely")
+                                .font(.headline)
+                                .foregroundStyle(primaryText)
+
+                            if showingWritingIndicator && !plainText.isEmpty {
+                                writingIndicator
+                                    .transition(
+                                        .opacity.combined(with: .move(edge: .top))
+                                    )
+                            }
+                        }
+
+                        Spacer()
+
+                        if plainText.count > 10 {
+                            HStack(spacing: 5) {
+                                Image(systemName: "brain")
+                                    .font(.caption2)
+
+                                Text("On device")
+                                    .font(.caption2)
+                                    .fontWeight(.medium)
+                            }
+                            .foregroundStyle(secondaryText)
+                        } else {
+                            Text("\(plainText.count) chars")
+                                .font(.caption2)
+                                .foregroundStyle(tertiaryText)
+                        }
+                    }
+
+                    editorBox(minHeight: editorHeight, cornerRadius: 22)
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 26)
+                        .fill(cardBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 26)
+                                .stroke(borderColor, lineWidth: 1)
+                        )
+                        .shadow(
+                            color: shadowColor,
+                            radius: 14,
+                            x: 0,
+                            y: 7
+                        )
+                )
+                .padding(.horizontal, 16)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.bottom, 8)
+        }
+    }
+
+    // --------------------------------------------------------
+    // MARK: - Main Rich Text Section
+    // --------------------------------------------------------
+    private var richTextEditorSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("What's on your mind?")
+                        .font(.headline)
+                        .foregroundStyle(primaryText)
+
+                    if showingWritingIndicator && !plainText.isEmpty {
+                        writingIndicator
+                            .transition(
+                                .opacity.combined(with: .move(edge: .top))
+                            )
+                    }
+                }
+
+                Spacer()
+
+                Button {
+                    if showJournalFullscreenCoachMark {
+                        dismissJournalFullscreenCoachMark()
+                    }
+                    toggleFocusMode()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.caption)
+
+                        Text("Focus")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(primaryText)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(
+                        Capsule()
+                            .fill(chipBackground)
+                            .overlay(
+                                Capsule()
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+
                 Button {
                     dismissKeyboard()
                 } label: {
-                    Image(systemName: "keyboard.chevron.compact.down")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 5) {
+                        Image(systemName: "keyboard.chevron.compact.down")
+                            .font(.caption)
+
+                        Text("Done")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(primaryText)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(
+                        Capsule()
+                            .fill(chipBackground)
+                            .overlay(
+                                Capsule()
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
+                    )
                 }
                 .buttonStyle(.plain)
 
                 Button {
                     toggleSpeechRecording()
                 } label: {
-                    Image(systemName:
-                        speechService.isRecording
-                            ? "stop.circle.fill" : "mic.circle.fill"
+                    Image(
+                        systemName: speechService.isRecording
+                        ? "stop.circle.fill"
+                        : "mic.circle.fill"
                     )
                     .font(.title3)
                     .foregroundStyle(
-                        speechService.isRecording ? .red : .purple
+                        speechService.isRecording ? .red : primaryText
                     )
                 }
                 .buttonStyle(.plain)
             }
 
-            // ---- THE EDITOR ----
-            // Toolbar is INSIDE the UITextView as
-            // inputAccessoryView — shows on all real devices
-            RichTextEditor(
-                attributedText: $attributedText,
-                selectedRange: $selectedRange,
-                onTextChange: { newText in
-                    plainText = newText.string
-                },
-                onFormattingAction: { action in
-                    handleFormattingAction(action)
-                }
-            )
-            .frame(minHeight: isFocusMode ? 520 : 220)
-            .padding(4)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(editorBackground)
-            )
+            editorBox(minHeight: 240, cornerRadius: 18)
 
-            // Hint
             if plainText.isEmpty {
-                Text("Bold, italic, lists and more — " +
-                     "use the toolbar above the keyboard")
+                Text("Use the toolbar above the keyboard for bold, lists, images, voice, and more.")
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(tertiaryText)
                     .padding(.horizontal, 4)
             }
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: 22)
                 .fill(cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22)
+                        .stroke(borderColor, lineWidth: 1)
+                )
+                .shadow(
+                    color: shadowColor,
+                    radius: 14,
+                    x: 0,
+                    y: 7
+                )
+        )
+    }
+
+    private func editorBox(
+        minHeight: CGFloat,
+        cornerRadius: CGFloat
+    ) -> some View {
+        ZStack(alignment: .topLeading) {
+            RichTextEditor(
+                attributedText: $attributedText,
+                selectedRange: $selectedRange,
+                caretRect: $caretRect,
+                isEditorFocused: $isEditorFocused,
+                onTextChange: { newText in
+                    plainText = newText.string
+                    handleTypingAnimation(for: newText.string)
+                },
+                onFormattingAction: { action in
+                    handleFormattingAction(action)
+                }
+            )
+            .frame(minHeight: minHeight)
+            .padding(8)
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(editorBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: cornerRadius)
+                            .stroke(borderColor, lineWidth: 1)
+                    )
+            )
+            .onChange(of: caretRect) { _, newValue in
+                guard isEditorFocused else { return }
+                updatePencilPosition(from: newValue)
+            }
+
+            if isEditorFocused &&
+                showingWritingIndicator &&
+                !plainText
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .isEmpty {
+                magicPencilOverlay
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    // --------------------------------------------------------
+    // MARK: - Coach Mark
+    // --------------------------------------------------------
+    private func presentJournalFullscreenCoachMarkIfNeeded() {
+        guard !hasSeenJournalFullscreenCoachMark else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            guard !showingMoodCheckIn else { return }
+
+            withAnimation(.easeInOut(duration: 0.22)) {
+                showJournalFullscreenCoachMark = true
+            }
+        }
+    }
+
+    private func dismissJournalFullscreenCoachMark() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            showJournalFullscreenCoachMark = false
+            hasSeenJournalFullscreenCoachMark = true
+        }
+    }
+
+    private var journalFullscreenCoachMarkOverlay: some View {
+        ZStack {
+            Color.black.opacity(colorScheme == .dark ? 0.42 : 0.18)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    dismissJournalFullscreenCoachMark()
+                }
+
+            VStack {
+                Spacer()
+                    .frame(height: 290)
+
+                HStack {
+                    Spacer()
+
+                    VStack(alignment: .trailing, spacing: 8) {
+                        Image(systemName: "arrow.up")
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(primaryText)
+                            .padding(.trailing, 92)
+
+                        coachMarkBubble(
+                            title: "Focus Writing",
+                            message: "Tap Focus to open a clean writing space with fewer distractions.",
+                            buttonTitle: "Got it"
+                        ) {
+                            dismissJournalFullscreenCoachMark()
+                        }
+                    }
+                    .padding(.trailing, 30)
+                }
+
+                Spacer()
+            }
+        }
+    }
+
+    private func coachMarkBubble(
+        title: String,
+        message: String,
+        buttonTitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.headline)
+                .fontWeight(.bold)
+                .foregroundStyle(primaryText)
+
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack {
+                Spacer()
+
+                Button(buttonTitle) {
+                    action()
+                }
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundStyle(primaryButtonText)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule()
+                        .fill(primaryButtonBackground)
+                )
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: 270, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(borderColor, lineWidth: 1)
+                )
+                .shadow(
+                    color: Color.black.opacity(0.16),
+                    radius: 18,
+                    x: 0,
+                    y: 10
+                )
         )
     }
 
     // --------------------------------------------------------
-    // MARK: - Handle Formatting Actions
+    // MARK: - Focus Mode Helper
+    // --------------------------------------------------------
+    private func toggleFocusMode() {
+        withAnimation(.easeInOut(duration: 0.25)) {
+            isFocusMode.toggle()
+
+            if isFocusMode {
+                showingPrompts = false
+                showingTagSelector = false
+                showJournalFullscreenCoachMark = false
+                hasSeenJournalFullscreenCoachMark = true
+            }
+        }
+    }
+
+    // --------------------------------------------------------
+    // MARK: - Pencil Animation
+    // --------------------------------------------------------
+    private var magicPencilOverlay: some View {
+        GeometryReader { geo in
+            let safeDistanceX: CGFloat = pencilMovingForward ? 28 : 34
+            let safeDistanceY: CGFloat = 14
+
+            let baseX = min(
+                max(pencilPosition.x + safeDistanceX, 30),
+                geo.size.width - 32
+            )
+
+            let baseY = min(
+                max(pencilPosition.y + safeDistanceY, 28),
+                geo.size.height - 28
+            )
+
+            let strokeX: CGFloat = pencilMovingForward
+                ? (pencilStrokePhase ? 2 : -1)
+                : (pencilStrokePhase ? -2 : 1)
+
+            let strokeY: CGFloat = pencilStrokePhase ? -1.5 : 1.5
+
+            let angle: Double = pencilMovingForward
+                ? (pencilStrokePhase ? -22 : -12)
+                : (pencilStrokePhase ? 202 : 190)
+
+            ZStack {
+                Circle()
+                    .fill(
+                        colorScheme == .dark
+                        ? Color.white.opacity(0.06)
+                        : Color.black.opacity(0.035)
+                    )
+                    .frame(width: 20, height: 20)
+                    .blur(radius: 1)
+
+                Image(systemName: "pencil.tip")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(primaryText.opacity(0.78))
+                    .rotationEffect(.degrees(angle))
+                    .offset(x: strokeX, y: strokeY)
+
+                Image(systemName: "sparkles")
+                    .font(.system(size: 6, weight: .semibold))
+                    .foregroundStyle(secondaryText.opacity(0.75))
+                    .offset(
+                        x: pencilStrokePhase ? 10 : 8,
+                        y: pencilStrokePhase ? -9 : -7
+                    )
+                    .opacity(showingWritingIndicator ? 0.75 : 0.25)
+            }
+            .position(x: baseX, y: baseY)
+            .animation(
+                .spring(response: 0.20, dampingFraction: 0.70),
+                value: pencilPosition
+            )
+            .animation(
+                .easeInOut(duration: 0.12),
+                value: pencilStrokePhase
+            )
+            .animation(
+                .easeInOut(duration: 0.12),
+                value: pencilMovingForward
+            )
+            .allowsHitTesting(false)
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var writingIndicator: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "pencil.tip")
+                .font(.caption)
+                .foregroundStyle(primaryText)
+
+            Text("Writing your thoughts...")
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundStyle(secondaryText)
+
+            Image(systemName: "sparkles")
+                .font(.caption2)
+                .foregroundStyle(secondaryText)
+        }
+    }
+
+    private func handleTypingAnimation(for text: String) {
+        typingHideTask?.cancel()
+
+        guard !text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty else {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showingWritingIndicator = false
+            }
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.12)) {
+            showingWritingIndicator = true
+            pencilStrokePhase.toggle()
+        }
+
+        let task = DispatchWorkItem {
+            withAnimation(.easeInOut(duration: 0.35)) {
+                showingWritingIndicator = false
+            }
+        }
+
+        typingHideTask = task
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.75,
+            execute: task
+        )
+    }
+
+    private func updatePencilPosition(from caret: CGRect) {
+        let newPoint = CGPoint(x: caret.maxX, y: caret.midY)
+
+        if newPoint.x > lastCaretPosition.x {
+            pencilMovingForward = true
+        } else if newPoint.x < lastCaretPosition.x {
+            pencilMovingForward = false
+        }
+
+        withAnimation(.easeInOut(duration: 0.12)) {
+            pencilPosition = newPoint
+        }
+
+        lastCaretPosition = newPoint
+    }
+
+    // --------------------------------------------------------
+    // MARK: - Formatting Actions
     // --------------------------------------------------------
     private func handleFormattingAction(
         _ action: FormattingAction
     ) {
         switch action {
-        case .bold:          applyBold()
-        case .italic:        applyItalic()
-        case .underline:     applyUnderline()
-        case .bulletList:    insertBulletList()
-        case .numberedList:  insertNumberedList()
-        case .quote:         insertQuote()
-        case .table:         insertTable()
-        case .image:         showingImagePicker = true
+        case .bold:
+            applyBold()
+
+        case .italic:
+            applyItalic()
+
+        case .underline:
+            applyUnderline()
+
+        case .bulletList:
+            insertBulletList()
+
+        case .numberedList:
+            insertNumberedList()
+
+        case .quote:
+            insertQuote()
+
+        case .table:
+            insertTable()
+
+        case .image:
+            showingImagePicker = true
+
         case .voice:
             toggleSpeechRecording()
+
         case .dismiss:
             dismissKeyboard()
         }
@@ -584,13 +1302,18 @@ struct EntryEditorView: View {
         if !speechService.isRecording {
             lastSpeechTranscript = ""
         }
-        Task { await speechService.toggleRecording() }
+
+        Task {
+            await speechService.toggleRecording()
+        }
     }
 
     private func dismissKeyboard() {
         UIApplication.shared.sendAction(
             #selector(UIResponder.resignFirstResponder),
-            to: nil, from: nil, for: nil
+            to: nil,
+            from: nil,
+            for: nil
         )
     }
 
@@ -611,11 +1334,11 @@ struct EntryEditorView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(
                             userHasOverridden
-                                ? "Your Mood"
-                                : "Detected Mood"
+                            ? "Your Mood"
+                            : "Detected Mood"
                         )
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryText)
 
                         Text(finalMood.displayName)
                             .font(.subheadline)
@@ -631,24 +1354,26 @@ struct EntryEditorView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "hand.tap.fill")
                                 .font(.caption2)
-                                .foregroundStyle(.purple)
+                                .foregroundStyle(primaryText)
+
                             Text("You chose")
                                 .font(.caption2)
-                                .foregroundStyle(.purple)
+                                .foregroundStyle(primaryText)
                         }
                     } else if plainText.count > 10 {
                         HStack(spacing: 4) {
                             Image(systemName: "brain")
                                 .font(.caption2)
-                                .foregroundStyle(.purple)
+                                .foregroundStyle(primaryText)
+
                             Text("Detected on device")
                                 .font(.caption2)
-                                .foregroundStyle(.purple)
+                                .foregroundStyle(primaryText)
                         }
                     } else {
                         Text("\(plainText.count) chars")
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(tertiaryText)
                     }
                 }
             }
@@ -659,16 +1384,17 @@ struct EntryEditorView: View {
         }
         .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(finalMood.color.opacity(
-                    colorScheme == .dark ? 0.15 : 0.08
-                ))
+            RoundedRectangle(cornerRadius: 18)
+                .fill(cardBackground)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(
-                            finalMood.color.opacity(0.25),
-                            lineWidth: 1
-                        )
+                    RoundedRectangle(cornerRadius: 18)
+                        .stroke(borderColor, lineWidth: 1)
+                )
+                .shadow(
+                    color: shadowColor,
+                    radius: 12,
+                    x: 0,
+                    y: 6
                 )
         )
         .animation(.easeInOut(duration: 0.3), value: finalMood)
@@ -679,24 +1405,33 @@ struct EntryEditorView: View {
             HStack {
                 Text("😢 Negative")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(secondaryText)
+
                 Spacer()
+
                 Text("Positive 😊")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(secondaryText)
             }
+
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.systemGray5))
+                        .fill(chipBackground)
                         .frame(height: 6)
+
                     let score = sentimentService
                         .analyze(text: plainText).score
                     let displayScore = (score + 1) / 2
+
                     RoundedRectangle(cornerRadius: 4)
                         .fill(
                             LinearGradient(
-                                colors: [.blue, .gray, .green],
+                                colors: [
+                                    Color.blue.opacity(0.72),
+                                    Color.gray.opacity(0.72),
+                                    Color.green.opacity(0.72)
+                                ],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -704,8 +1439,7 @@ struct EntryEditorView: View {
                         .frame(
                             width: max(
                                 8,
-                                geo.size.width *
-                                CGFloat(displayScore)
+                                geo.size.width * CGFloat(displayScore)
                             ),
                             height: 6
                         )
@@ -733,17 +1467,26 @@ struct EntryEditorView: View {
                     .repeatForever(autoreverses: true),
                     value: speechService.isRecording
                 )
+
             Text("Recording... speak now")
                 .font(.subheadline)
+                .fontWeight(.medium)
                 .foregroundStyle(.red)
+
             Spacer()
         }
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.red.opacity(
-                    colorScheme == .dark ? 0.15 : 0.08
-                ))
+            RoundedRectangle(cornerRadius: 14)
+                .fill(
+                    Color.red.opacity(
+                        colorScheme == .dark ? 0.15 : 0.08
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.red.opacity(0.20), lineWidth: 1)
+                )
         )
     }
 
@@ -759,39 +1502,43 @@ struct EntryEditorView: View {
             } label: {
                 HStack {
                     Image(systemName: "lightbulb.fill")
-                        .foregroundStyle(.yellow)
+                        .foregroundStyle(primaryText)
+
                     Text("Reflection Prompts")
                         .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.primary)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(primaryText)
+
                     Spacer()
+
                     Image(systemName: "chevron.down")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(
-                            showingPrompts ? 180 : 0
-                        ))
+                        .foregroundStyle(secondaryText)
+                        .rotationEffect(.degrees(showingPrompts ? 180 : 0))
                         .animation(
                             .easeInOut(duration: 0.2),
                             value: showingPrompts
                         )
                 }
-                .padding(12)
+                .padding(13)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 16)
                         .fill(cardBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(borderColor, lineWidth: 1)
+                        )
                 )
             }
             .buttonStyle(.plain)
 
             if showingPrompts {
                 VStack(spacing: 8) {
-                    ForEach(
-                        finalMood.reflectionPrompts,
-                        id: \.self
-                    ) { prompt in
+                    ForEach(finalMood.reflectionPrompts, id: \.self) { prompt in
                         Button {
                             appendToRichText("\n\(prompt)\n\n")
+                            selectedPrompt = prompt
+
                             withAnimation {
                                 showingPrompts = false
                             }
@@ -799,32 +1546,36 @@ struct EntryEditorView: View {
                             HStack {
                                 Text(prompt)
                                     .font(.subheadline)
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(primaryText)
                                     .multilineTextAlignment(.leading)
+
                                 Spacer()
-                                Image(systemName:
-                                    "arrow.right.circle"
-                                )
-                                .foregroundStyle(.purple)
+
+                                Image(systemName: "arrow.right.circle")
+                                    .foregroundStyle(primaryText)
                             }
-                            .padding(10)
+                            .padding(12)
                             .background(
-                                RoundedRectangle(cornerRadius: 10)
+                                RoundedRectangle(cornerRadius: 14)
                                     .fill(cardBackground)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 14)
+                                            .stroke(borderColor, lineWidth: 1)
+                                    )
                             )
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .transition(.opacity.combined(
-                    with: .move(edge: .top)
-                ))
+                .transition(
+                    .opacity.combined(with: .move(edge: .top))
+                )
             }
         }
     }
 
     // --------------------------------------------------------
-    // MARK: - Tags
+    // MARK: - Tags and Emojis
     // --------------------------------------------------------
     private var tagAndEmojiSection: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -835,32 +1586,38 @@ struct EntryEditorView: View {
             } label: {
                 HStack {
                     Image(systemName: "tag.fill")
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(primaryText)
+
                     Text("Add Tags & Emojis")
                         .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.primary)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(primaryText)
+
                     if !selectedTags.isEmpty {
                         Text("(\(selectedTags.count))")
                             .font(.caption)
-                            .foregroundStyle(.purple)
+                            .foregroundStyle(secondaryText)
                     }
+
                     Spacer()
+
                     Image(systemName: "chevron.down")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .rotationEffect(.degrees(
-                            showingTagSelector ? 180 : 0
-                        ))
+                        .foregroundStyle(secondaryText)
+                        .rotationEffect(.degrees(showingTagSelector ? 180 : 0))
                         .animation(
                             .easeInOut(duration: 0.2),
                             value: showingTagSelector
                         )
                 }
-                .padding(12)
+                .padding(13)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 16)
                         .fill(cardBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(borderColor, lineWidth: 1)
+                        )
                 )
             }
             .buttonStyle(.plain)
@@ -870,7 +1627,7 @@ struct EntryEditorView: View {
                     Text("Tags")
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryText)
 
                     LazyVGrid(
                         columns: [
@@ -879,25 +1636,28 @@ struct EntryEditorView: View {
                         spacing: 8
                     ) {
                         ForEach(availableTags, id: \.self) { tag in
-                            let isSelected =
-                                selectedTags.contains(tag)
+                            let isSelected = selectedTags.contains(tag)
+
                             Button {
                                 toggleTag(tag)
                             } label: {
                                 Text(tag)
                                     .font(.caption)
-                                    .fontWeight(.medium)
+                                    .fontWeight(.semibold)
                                     .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
+                                    .padding(.vertical, 7)
                                     .background(
-                                        Capsule().fill(
-                                            isSelected
-                                                ? Color.purple
-                                                : Color(.systemGray5)
-                                        )
+                                        Capsule()
+                                            .fill(
+                                                isSelected
+                                                ? primaryButtonBackground
+                                                : chipBackground
+                                            )
                                     )
                                     .foregroundStyle(
-                                        isSelected ? .white : .primary
+                                        isSelected
+                                        ? primaryButtonText
+                                        : primaryText
                                     )
                             }
                             .buttonStyle(.plain)
@@ -905,33 +1665,41 @@ struct EntryEditorView: View {
                     }
 
                     Divider()
+                        .background(borderColor)
 
                     Text("Mood Emojis")
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryText)
+
                     emojiRow(emojis: moodEmojis)
 
                     Text("Activities")
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryText)
+
                     emojiRow(emojis: activityEmojis)
 
                     Text("Feelings")
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryText)
+
                     emojiRow(emojis: feelingEmojis)
                 }
                 .padding(12)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 16)
                         .fill(cardBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(borderColor, lineWidth: 1)
+                        )
                 )
-                .transition(.opacity.combined(
-                    with: .move(edge: .top)
-                ))
+                .transition(
+                    .opacity.combined(with: .move(edge: .top))
+                )
             }
         }
     }
@@ -941,6 +1709,7 @@ struct EntryEditorView: View {
             HStack(spacing: 8) {
                 ForEach(emojis, id: \.self) { emoji in
                     let isSelected = selectedTags.contains(emoji)
+
                     Button {
                         toggleTag(emoji)
                     } label: {
@@ -951,27 +1720,22 @@ struct EntryEditorView: View {
                                 Circle()
                                     .fill(
                                         isSelected
-                                            ? Color.purple
-                                                .opacity(
-                                                colorScheme == .dark
-                                                    ? 0.3 : 0.15
-                                            )
-                                            : Color(.systemGray5)
+                                        ? selectedSoftBackground
+                                        : chipBackground
                                     )
                                     .overlay(
-                                        Circle().stroke(
-                                            isSelected
-                                                ? Color.purple
+                                        Circle()
+                                            .stroke(
+                                                isSelected
+                                                ? primaryText.opacity(0.55)
                                                 : Color.clear,
-                                            lineWidth: 2
-                                        )
+                                                lineWidth: 2
+                                            )
                                     )
                             )
                             .scaleEffect(isSelected ? 1.15 : 1.0)
                             .animation(
-                                .spring(
-                                    duration: 0.3, bounce: 0.5
-                                ),
+                                .spring(response: 0.30, dampingFraction: 0.65),
                                 value: isSelected
                             )
                     }
@@ -982,13 +1746,13 @@ struct EntryEditorView: View {
     }
 
     // --------------------------------------------------------
-    // MARK: - Selected Tags Display
+    // MARK: - Selected Tags
     // --------------------------------------------------------
     private var selectedTagsDisplay: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Selected")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(secondaryText)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -997,27 +1761,25 @@ struct EntryEditorView: View {
                             Text(tag)
                                 .font(.caption)
                                 .fontWeight(.medium)
+
                             Button {
-                                selectedTags.removeAll {
-                                    $0 == tag
-                                }
+                                selectedTags.removeAll { $0 == tag }
                             } label: {
                                 Image(systemName: "xmark")
-                                    .font(.system(
-                                        size: 8, weight: .bold
-                                    ))
+                                    .font(.system(size: 8, weight: .bold))
                             }
                         }
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
+                        .padding(.vertical, 6)
                         .background(
                             Capsule()
-                                .fill(Color.purple.opacity(
-                                    colorScheme == .dark
-                                        ? 0.25 : 0.12
-                                ))
+                                .fill(chipBackground)
+                                .overlay(
+                                    Capsule()
+                                        .stroke(borderColor, lineWidth: 1)
+                                )
                         )
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(primaryText)
                     }
                 }
             }
@@ -1025,75 +1787,60 @@ struct EntryEditorView: View {
     }
 
     // --------------------------------------------------------
-    // MARK: - Mood Override Bar
+    // MARK: - Mood Override
     // --------------------------------------------------------
     private var moodOverrideBar: some View {
         VStack(spacing: 10) {
             HStack {
                 Image(systemName: "brain")
                     .font(.caption)
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(primaryText)
+
                 Text("Override Mood")
                     .font(.caption)
                     .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(secondaryText)
+
                 Spacer()
+
                 if userHasOverridden {
                     Button {
-                        withAnimation(.spring(duration: 0.3)) {
+                        withAnimation(.spring(response: 0.30, dampingFraction: 0.70)) {
                             userHasOverridden = false
                         }
                     } label: {
                         HStack(spacing: 3) {
-                            Image(systemName:
-                                "arrow.counterclockwise"
-                            )
-                            .font(.caption2)
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.caption2)
+
                             Text("Use Detection")
                                 .font(.caption2)
                         }
-                        .foregroundStyle(.purple)
+                        .foregroundStyle(primaryText)
                     }
                 }
             }
 
             HStack(spacing: 0) {
-                ForEach(
-                    MoodType.allCases, id: \.self
-                ) { mood in
+                ForEach(MoodType.allCases, id: \.self) { mood in
                     let isSelected = finalMood == mood
+
                     Button {
-                        withAnimation(
-                            .spring(duration: 0.3, bounce: 0.5)
-                        ) {
+                        withAnimation(.spring(response: 0.30, dampingFraction: 0.65)) {
                             userSelectedMood = mood
                             userHasOverridden = true
                         }
+
                         UIImpactFeedbackGenerator(style: .light)
                             .impactOccurred()
                     } label: {
                         VStack(spacing: 4) {
                             Text(mood.emoji)
-                                .font(.system(
-                                    size: isSelected ? 28 : 22
-                                ))
-                                .scaleEffect(
-                                    isSelected ? 1.1 : 1.0
-                                )
-                                .animation(
-                                    .spring(
-                                        duration: 0.3,
-                                        bounce: 0.5
-                                    ),
-                                    value: isSelected
-                                )
+                                .font(.system(size: isSelected ? 28 : 22))
+                                .scaleEffect(isSelected ? 1.1 : 1.0)
 
                             Circle()
-                                .fill(
-                                    isSelected
-                                        ? mood.color
-                                        : Color.clear
-                                )
+                                .fill(isSelected ? mood.color : Color.clear)
                                 .frame(width: 4, height: 4)
                         }
                         .frame(maxWidth: .infinity)
@@ -1102,11 +1849,8 @@ struct EntryEditorView: View {
                             RoundedRectangle(cornerRadius: 10)
                                 .fill(
                                     isSelected
-                                        ? mood.color.opacity(
-                                            colorScheme == .dark
-                                                ? 0.2 : 0.1
-                                          )
-                                        : Color.clear
+                                    ? selectedSoftBackground
+                                    : Color.clear
                                 )
                         )
                     }
@@ -1115,8 +1859,12 @@ struct EntryEditorView: View {
             }
             .padding(6)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(editorBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(borderColor, lineWidth: 1)
+                    )
             )
         }
     }
@@ -1135,9 +1883,11 @@ struct EntryEditorView: View {
     private func applyUnderline() {
         let range = selectedRange
         guard range.length > 0 else { return }
+
         let mutable = NSMutableAttributedString(
             attributedString: attributedText
         )
+
         let current = mutable.attribute(
             .underlineStyle,
             at: range.location,
@@ -1152,9 +1902,11 @@ struct EntryEditorView: View {
             )
         } else {
             mutable.removeAttribute(
-                .underlineStyle, range: range
+                .underlineStyle,
+                range: range
             )
         }
+
         attributedText = mutable
     }
 
@@ -1169,10 +1921,13 @@ struct EntryEditorView: View {
         )
 
         mutable.enumerateAttribute(
-            .font, in: range, options: []
+            .font,
+            in: range,
+            options: []
         ) { value, subRange, _ in
             let font = value as? UIFont
-                ?? UIFont.preferredFont(forTextStyle: .body)
+            ?? UIFont.preferredFont(forTextStyle: .body)
+
             var traits = font.fontDescriptor.symbolicTraits
 
             if traits.contains(trait) {
@@ -1183,15 +1938,20 @@ struct EntryEditorView: View {
 
             let desc = font.fontDescriptor
                 .withSymbolicTraits(traits)
-                ?? font.fontDescriptor
+            ?? font.fontDescriptor
+
             let newFont = UIFont(
                 descriptor: desc,
                 size: font.pointSize
             )
+
             mutable.addAttribute(
-                .font, value: newFont, range: subRange
+                .font,
+                value: newFont,
+                range: subRange
             )
         }
+
         attributedText = mutable
     }
 
@@ -1203,9 +1963,11 @@ struct EntryEditorView: View {
         let lines = plainText
             .components(separatedBy: "\n")
             .filter { !$0.isEmpty }
+
         let count = lines.filter {
             $0.first?.isNumber == true
         }.count
+
         appendToRichText("\n\(count + 1). ")
     }
 
@@ -1213,12 +1975,11 @@ struct EntryEditorView: View {
         let quote = NSMutableAttributedString(
             string: "\n",
             attributes: [
-                .font: UIFont.preferredFont(
-                    forTextStyle: .body
-                ),
+                .font: UIFont.preferredFont(forTextStyle: .body),
                 .foregroundColor: UIColor.label
             ]
         )
+
         let quoteText = NSMutableAttributedString(
             string: "❝ Quote here ❞",
             attributes: [
@@ -1226,6 +1987,7 @@ struct EntryEditorView: View {
                 .foregroundColor: UIColor.secondaryLabel
             ]
         )
+
         quote.append(quoteText)
         quote.append(NSAttributedString(string: "\n"))
         appendAttributedText(quote)
@@ -1243,35 +2005,19 @@ struct EntryEditorView: View {
         let mutable = NSMutableAttributedString(
             attributedString: attributedText
         )
-        mutable.append(NSAttributedString(
-            string: text,
-            attributes: [
-                .font: UIFont.preferredFont(
-                    forTextStyle: .body
-                ),
-                .foregroundColor: UIColor.label
-            ]
-        ))
+
+        mutable.append(
+            NSAttributedString(
+                string: text,
+                attributes: [
+                    .font: UIFont.preferredFont(forTextStyle: .body),
+                    .foregroundColor: UIColor.label
+                ]
+            )
+        )
+
         attributedText = mutable
         plainText = mutable.string
-    }
-
-    private func appendSpeechDelta(_ text: String) {
-        guard !text.isEmpty else {
-            lastSpeechTranscript = ""
-            return
-        }
-
-        let addition: String
-        if text.hasPrefix(lastSpeechTranscript) {
-            addition = String(text.dropFirst(lastSpeechTranscript.count))
-        } else {
-            addition = text
-        }
-
-        lastSpeechTranscript = text
-        guard !addition.isEmpty else { return }
-        appendToRichText(addition)
     }
 
     private func appendAttributedText(
@@ -1280,21 +2026,53 @@ struct EntryEditorView: View {
         let mutable = NSMutableAttributedString(
             attributedString: attributedText
         )
+
         mutable.append(text)
+
         attributedText = mutable
         plainText = mutable.string
     }
 
+    // --------------------------------------------------------
+    // MARK: - Speech
+    // --------------------------------------------------------
+    private func appendSpeechDelta(_ text: String) {
+        guard !text.isEmpty else {
+            lastSpeechTranscript = ""
+            return
+        }
+
+        let addition: String
+
+        if text.hasPrefix(lastSpeechTranscript) {
+            addition = String(
+                text.dropFirst(lastSpeechTranscript.count)
+            )
+        } else {
+            addition = text
+        }
+
+        lastSpeechTranscript = text
+
+        guard !addition.isEmpty else { return }
+
+        appendToRichText(addition)
+    }
+
+    // --------------------------------------------------------
+    // MARK: - Image
+    // --------------------------------------------------------
     private func loadImage(
         from item: PhotosPickerItem?
     ) async {
         guard let item = item else { return }
+
         do {
-            if let data = try await item.loadTransferable(
-                type: Data.self
-            ),
+            if let data = try await item.loadTransferable(type: Data.self),
                let image = UIImage(data: data) {
-                await MainActor.run { insertImage(image) }
+                await MainActor.run {
+                    insertImage(image)
+                }
             }
         } catch {
             print("Image load error: \(error)")
@@ -1305,42 +2083,51 @@ struct EntryEditorView: View {
         let mutable = NSMutableAttributedString(
             attributedString: attributedText
         )
+
         mutable.append(NSAttributedString(string: "\n"))
 
         let attachment = NSTextAttachment()
         let maxWidth: CGFloat = 260
         let scale = maxWidth / image.size.width
+
         attachment.bounds = CGRect(
-            x: 0, y: 0,
+            x: 0,
+            y: 0,
             width: maxWidth,
             height: image.size.height * scale
         )
+
         attachment.image = image
 
         mutable.append(
             NSAttributedString(attachment: attachment)
         )
-        mutable.append(NSAttributedString(
-            string: "\n",
-            attributes: [
-                .font: UIFont.preferredFont(
-                    forTextStyle: .body
-                ),
-                .foregroundColor: UIColor.label
-            ]
-        ))
+
+        mutable.append(
+            NSAttributedString(
+                string: "\n",
+                attributes: [
+                    .font: UIFont.preferredFont(forTextStyle: .body),
+                    .foregroundColor: UIColor.label
+                ]
+            )
+        )
+
         attributedText = mutable
         plainText = mutable.string
     }
 
     // --------------------------------------------------------
-    // MARK: - Load / Save Entry
+    // MARK: - Load / Save
     // --------------------------------------------------------
     private func loadExistingEntry(_ entry: JournalEntry) {
         if let data = entry.richTextData,
            let restored = try? NSAttributedString(
             data: data,
-            options: [.documentType: NSAttributedString.DocumentType.rtfd],
+            options: [
+                .documentType:
+                    NSAttributedString.DocumentType.rtfd
+            ],
             documentAttributes: nil
            ) {
             attributedText = restored
@@ -1348,13 +2135,12 @@ struct EntryEditorView: View {
             attributedText = NSAttributedString(
                 string: entry.text,
                 attributes: [
-                    .font: UIFont.preferredFont(
-                        forTextStyle: .body
-                    ),
+                    .font: UIFont.preferredFont(forTextStyle: .body),
                     .foregroundColor: UIColor.label
                 ]
             )
         }
+
         plainText = entry.text
         selectedTags = entry.tags
         selectedPrompt = entry.reflectionPromptUsed
@@ -1366,10 +2152,13 @@ struct EntryEditorView: View {
         if speechService.isRecording {
             speechService.stopRecording()
         }
+
         let text = plainText.trimmingCharacters(
             in: .whitespacesAndNewlines
         )
+
         guard !text.isEmpty else { return }
+
         let richTextData = archivedRichTextData()
 
         if let existing = existingEntry {
@@ -1390,6 +2179,7 @@ struct EntryEditorView: View {
                 moodType: finalMood
             )
         }
+
         dismiss()
     }
 
@@ -1398,6 +2188,7 @@ struct EntryEditorView: View {
             location: 0,
             length: attributedText.length
         )
+
         return try? attributedText.data(
             from: fullRange,
             documentAttributes: [
@@ -1420,16 +2211,16 @@ struct EntryEditorView: View {
 // Preview
 // ============================================================
 #Preview("New Entry") {
-    let config = ModelConfiguration(
-        isStoredInMemoryOnly: true
-    )
+    let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
         for: JournalEntry.self,
         configurations: config
     )
+
     let viewModel = JournalViewModel(
         modelContext: container.mainContext
     )
+
     EntryEditorView(
         viewModel: viewModel,
         existingEntry: nil

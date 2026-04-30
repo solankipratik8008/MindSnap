@@ -7,25 +7,20 @@
 
 // ============================================================
 // ReflectionPromptView.swift
-// MindSnap — A reusable card for displaying a single prompt
+// MindSnap — Premium Monochrome Reflection Prompt Card
 //
-// WHAT THIS FILE DOES:
-// This is a small, reusable View that displays ONE reflection
-// prompt as a beautifully styled card.
+// UI UPDATE:
+// 1. Matches the new professional black/white MindSnap theme
+// 2. Cleaner card layout for light and dark mode
+// 3. Mood color is kept only as a small meaningful accent
+// 4. More premium selected/unselected states
 //
-// It is used inside EntryEditorView's prompt section to show
-// each individual prompt suggestion.
-//
-// MVVM ROLE: View layer
-//            Pure presentation component. Receives data via
-//            properties and fires a callback when tapped.
-//            No logic, no ViewModel needed — too simple.
-//
-// WHY A SEPARATE FILE?
-// Even though this is a small View, separating it means:
-//   - We can reuse it in other screens later (e.g. InsightsView)
-//   - EntryEditorView stays cleaner and easier to read
-//   - We can update the card design in just one place
+// FUNCTIONALITY KEPT:
+// 1. Receives prompt text
+// 2. Receives mood
+// 3. Receives selected state
+// 4. Calls onTap when tapped
+// 5. No data/model/save logic changed
 // ============================================================
 
 import SwiftUI
@@ -33,42 +28,67 @@ import SwiftUI
 struct ReflectionPromptView: View {
 
     // --------------------------------------------------------
-    // prompt — The suggestion text to display
-    //
-    // Example: "What made today great?"
-    // Passed in by the parent View (EntryEditorView)
+    // MARK: - Inputs
     // --------------------------------------------------------
     let prompt: String
-
-    // --------------------------------------------------------
-    // mood — The mood this prompt belongs to
-    //
-    // Used to color-code the card to match the current mood.
-    // Example: .happy prompts get a green tint
-    // --------------------------------------------------------
     let mood: MoodType
-
-    // --------------------------------------------------------
-    // isSelected — Whether this prompt is currently chosen
-    //
-    // true  = user tapped this prompt → show selected style
-    // false = normal unselected style
-    // --------------------------------------------------------
     let isSelected: Bool
+    let onTap: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
 
     // --------------------------------------------------------
-    // onTap — Callback closure when user taps the card
-    //
-    // A closure is a block of code passed as a parameter.
-    // The PARENT decides what happens when tapped.
-    // This View just says "I was tapped" and lets the parent
-    // handle the logic. This is called the "callback pattern."
-    //
-    // () -> Void means:
-    //   ()   = takes no parameters
-    //   Void = returns nothing
+    // MARK: - Theme
     // --------------------------------------------------------
-    let onTap: () -> Void
+    private var cardBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.09, green: 0.09, blue: 0.10)
+        : Color.white
+    }
+
+    private var selectedBackground: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.08)
+        : Color.black.opacity(0.045)
+    }
+
+    private var iconBackground: Color {
+        isSelected
+        ? mood.color.opacity(colorScheme == .dark ? 0.22 : 0.14)
+        : Color.black.opacity(colorScheme == .dark ? 0.0 : 0.0)
+    }
+
+    private var primaryText: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var secondaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.62)
+        : Color.black.opacity(0.52)
+    }
+
+    private var tertiaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.40)
+        : Color.black.opacity(0.36)
+    }
+
+    private var borderColor: Color {
+        if isSelected {
+            return mood.color.opacity(colorScheme == .dark ? 0.42 : 0.32)
+        } else {
+            return colorScheme == .dark
+            ? Color.white.opacity(0.08)
+            : Color.black.opacity(0.07)
+        }
+    }
+
+    private var shadowColor: Color {
+        colorScheme == .dark
+        ? Color.clear
+        : Color.black.opacity(isSelected ? 0.08 : 0.05)
+    }
 
     // --------------------------------------------------------
     // MARK: - Body
@@ -77,115 +97,141 @@ struct ReflectionPromptView: View {
         Button(action: onTap) {
             HStack(alignment: .top, spacing: 12) {
 
-                // ---- Left Icon ----
-                // Changes based on selected state
-                ZStack {
-                    // Circular background behind the icon
-                    Circle()
-                        .fill(isSelected
-                              ? mood.color
-                              : mood.color.opacity(0.12))
-                        .frame(width: 36, height: 36)
+                leadingIcon
 
-                    // Icon inside the circle
-                    Image(systemName: isSelected
-                          ? "checkmark"
-                          : "quote.opening")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(isSelected
-                                         ? .white
-                                         : mood.color)
-                }
-
-                // ---- Prompt Text ----
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(prompt)
                         .font(.subheadline)
-                        // Selected = primary color, unselected = secondary
-                        .foregroundStyle(isSelected
-                                         ? Color.primary
-                                         : Color.secondary)
+                        .fontWeight(isSelected ? .semibold : .medium)
+                        .foregroundStyle(primaryText)
                         .multilineTextAlignment(.leading)
-                        // Allow text to wrap to multiple lines
                         .fixedSize(horizontal: false, vertical: true)
 
-                    // Small "Tap to use" hint when not selected
-                    if !isSelected {
-                        Text("Tap to use this prompt")
-                            .font(.caption2)
-                            .foregroundStyle(mood.color.opacity(0.7))
-                    } else {
-                        // "Selected" confirmation when chosen
-                        Text("✓ Using this prompt")
-                            .font(.caption2)
-                            .foregroundStyle(mood.color)
-                            .fontWeight(.medium)
-                    }
+                    statusText
                 }
 
-                Spacer()
+                Spacer(minLength: 8)
 
-                // ---- Right Arrow (only when not selected) ----
-                if !isSelected {
-                    Image(systemName: "arrow.right.circle.fill")
-                        .foregroundStyle(mood.color.opacity(0.4))
-                        .font(.title3)
-                }
+                trailingIcon
             }
             .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(isSelected
-                          ? mood.color.opacity(0.08)
-                          : Color(.systemBackground))
-                    // Shadow lifts the card off the background
-                    .shadow(
-                        color: Color.black.opacity(isSelected ? 0.08 : 0.05),
-                        radius: isSelected ? 6 : 4,
-                        x: 0,
-                        y: 2
-                    )
-            )
-            // Colored border — stronger when selected
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(
-                        mood.color.opacity(isSelected ? 0.5 : 0.15),
-                        lineWidth: isSelected ? 1.5 : 1
-                    )
+            .background(cardShape)
+            .overlay(cardBorder)
+            .scaleEffect(isSelected ? 1.01 : 1.0)
+            .contentShape(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
             )
         }
-        // Scale down slightly when pressed — tactile feel
         .buttonStyle(.plain)
-        // Animate the selection state change smoothly
-        .animation(.easeInOut(duration: 0.2), value: isSelected)
+        .animation(.easeInOut(duration: 0.20), value: isSelected)
+    }
+
+    // --------------------------------------------------------
+    // MARK: - Subviews
+    // --------------------------------------------------------
+    private var leadingIcon: some View {
+        ZStack {
+            Circle()
+                .fill(isSelected ? mood.color : selectedBackground)
+                .frame(width: 38, height: 38)
+                .overlay(
+                    Circle()
+                        .stroke(
+                            isSelected
+                            ? mood.color.opacity(0.45)
+                            : borderColor,
+                            lineWidth: 1
+                        )
+                )
+
+            Image(
+                systemName: isSelected
+                ? "checkmark"
+                : "quote.opening"
+            )
+            .font(.system(size: 14, weight: .bold))
+            .foregroundStyle(
+                isSelected
+                ? .white
+                : primaryText.opacity(0.78)
+            )
+        }
+    }
+
+    private var statusText: some View {
+        HStack(spacing: 5) {
+            if isSelected {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(mood.color)
+
+                Text("Using this prompt")
+                    .font(.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(mood.color)
+            } else {
+                Image(systemName: "hand.tap")
+                    .font(.caption2)
+                    .foregroundStyle(tertiaryText)
+
+                Text("Tap to use this prompt")
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundStyle(tertiaryText)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var trailingIcon: some View {
+        if isSelected {
+            Image(systemName: "sparkles")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(mood.color.opacity(0.85))
+                .padding(.top, 2)
+        } else {
+            Image(systemName: "arrow.right.circle")
+                .font(.title3)
+                .foregroundStyle(secondaryText)
+                .padding(.top, 1)
+        }
+    }
+
+    private var cardShape: some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(isSelected ? selectedBackground : cardBackground)
+            .shadow(
+                color: shadowColor,
+                radius: isSelected ? 10 : 7,
+                x: 0,
+                y: isSelected ? 5 : 3
+            )
+    }
+
+    private var cardBorder: some View {
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .stroke(borderColor, lineWidth: isSelected ? 1.4 : 1)
     }
 }
 
 // ============================================================
-// ReflectionPromptCard_Previews
-//
-// Shows all 5 mood types with selected and unselected states
-// so we can check every visual variation at once.
+// MARK: - Previews
 // ============================================================
-#Preview {
+#Preview("Light Mode") {
     ScrollView {
         VStack(spacing: 16) {
 
-            // ---- Section: Unselected prompts ----
             Text("Unselected Prompts")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)
 
-            // Show one prompt for each mood type, unselected
             ForEach(MoodType.allCases, id: \.self) { mood in
                 ReflectionPromptView(
                     prompt: mood.reflectionPrompts[0],
                     mood: mood,
                     isSelected: false,
                     onTap: {
-                        // Preview only — no action needed
                         print("Tapped: \(mood.displayName) prompt")
                     }
                 )
@@ -195,13 +241,11 @@ struct ReflectionPromptView: View {
             Divider()
                 .padding(.vertical, 8)
 
-            // ---- Section: Selected state ----
             Text("Selected State")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal)
 
-            // Show the happy prompt in selected state
             ReflectionPromptView(
                 prompt: "What made today great?",
                 mood: .happy,
@@ -210,7 +254,6 @@ struct ReflectionPromptView: View {
             )
             .padding(.horizontal)
 
-            // Show the anxious prompt in selected state
             ReflectionPromptView(
                 prompt: "What is one thing within your control right now?",
                 mood: .anxious,
@@ -221,5 +264,46 @@ struct ReflectionPromptView: View {
         }
         .padding(.vertical, 16)
     }
-    .background(Color(.systemGroupedBackground))
+    .background(Color(red: 0.96, green: 0.96, blue: 0.97))
+}
+
+#Preview("Dark Mode") {
+    ScrollView {
+        VStack(spacing: 16) {
+
+            Text("Unselected Prompts")
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+
+            ForEach(MoodType.allCases, id: \.self) { mood in
+                ReflectionPromptView(
+                    prompt: mood.reflectionPrompts[0],
+                    mood: mood,
+                    isSelected: false,
+                    onTap: {}
+                )
+                .padding(.horizontal)
+            }
+
+            Divider()
+                .padding(.vertical, 8)
+
+            Text("Selected State")
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+
+            ReflectionPromptView(
+                prompt: "What made today great?",
+                mood: .happy,
+                isSelected: true,
+                onTap: {}
+            )
+            .padding(.horizontal)
+        }
+        .padding(.vertical, 16)
+    }
+    .background(Color(red: 0.03, green: 0.03, blue: 0.035))
+    .preferredColorScheme(.dark)
 }

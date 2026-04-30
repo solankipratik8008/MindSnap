@@ -5,16 +5,19 @@
 //  Created by Pratik Solanki on 2026-04-23.
 // ============================================================
 // AddGoalView.swift
-// MindSnap — FULLY FIXED
+// MindSnap — Premium Monochrome Add/Edit Goal
 //
-// FIXES:
-// 1. Uses existingGoal (not editingGoal) parameter
-// 2. No hasReminder / reminderTime — uses [ReminderTime]
-// 3. Correct GoalCategory cases: fitness/mind/health/social/creativity/custom
-// 4. Correct scheduleGoalReminders signature
-// 5. Correct cancelGoalReminders signature
-// 6. activityType before goalType in addGoal call
-// 7. Correct sfSymbolFor switch cases
+// SAFE UI UPDATE:
+// 1. Based on your working AddGoalView file
+// 2. Keeps existingGoal parameter
+// 3. Keeps [ReminderTime] reminders
+// 4. Keeps HealthKit access logic
+// 5. Keeps notification/reminder logic
+// 6. Keeps duplicate validation
+// 7. Keeps addGoal/updateGoal signatures
+// 8. Keeps edit-mode loading
+// 9. Removes broken spellCheckingDisabled modifier
+// 10. Updates only UI/theme safely
 // ============================================================
 
 import SwiftUI
@@ -28,7 +31,9 @@ struct AddGoalView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
-    @AppStorage("isHealthSyncEnabled") private var isHealthSyncEnabled = false
+
+    @AppStorage("isHealthSyncEnabled")
+    private var isHealthSyncEnabled = false
 
     // ---- Basic info ----
     @State private var goalName = ""
@@ -46,9 +51,9 @@ struct AddGoalView: View {
 
     // ---- Repeat ----
     @State private var selectedRepeatType = GoalRepeatType.daily
-    @State private var customRepeatDays: [Int] = [1,2,3,4,5]
+    @State private var customRepeatDays: [Int] = [1, 2, 3, 4, 5]
 
-    // ---- Reminders — uses [ReminderTime] array ----
+    // ---- Reminders ----
     @State private var reminders: [ReminderTime] = []
     @State private var showingTimePicker = false
     @State private var newReminderTime = Date()
@@ -64,13 +69,16 @@ struct AddGoalView: View {
     @State private var showingPermissionDenied = false
     @State private var showingHealthManualNotice = false
 
-    private var isEditMode: Bool { existingGoal != nil }
+    private var isEditMode: Bool {
+        existingGoal != nil
+    }
+
     private var shouldRequestHealthAccess: Bool {
         selectedType == .progress &&
         HealthKitService.healthSupportedActivityTypes.contains(selectedActivityType)
     }
 
-    private let dayLabels = ["Mo","Tu","We","Th","Fr","Sa","Su"]
+    private let dayLabels = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
 
     private let goalSymbols: [(String, String)] = [
         ("figure.run", "Run"),
@@ -96,12 +104,93 @@ struct AddGoalView: View {
     ]
 
     private let customEmojis = [
-        "🏃","🏋️","🧘","🚶","🏊","🚴","🤸","⚽","🏀","🎾",
-        "💧","😴","🥗","💊","❤️","🧠","🦷","👁","🦵","🦴",
-        "📚","🎓","✍️","🎵","💻","🗣️","🎨","📸","🍳","🌱",
-        "📞","👨‍👩‍👧‍�","🤝","📌","🎁","☕","🌅","🌙","⭐","🔥",
-        "💪","🏆","🎯","✅","💡","🚀","🌈","⚡","🎉","🙏"
+        "🏃", "🏋️", "🧘", "🚶", "🏊", "🚴", "🤸", "⚽", "🏀", "🎾",
+        "💧", "😴", "🥗", "💊", "❤️", "🧠", "🦷", "👁", "🦵", "🦴",
+        "📚", "🎓", "✍️", "🎵", "💻", "🗣️", "🎨", "📸", "🍳", "🌱",
+        "📞", "👨‍👩‍👧‍👦", "🤝", "📌", "🎁", "☕", "🌅", "🌙", "⭐", "🔥",
+        "💪", "🏆", "🎯", "✅", "💡", "🚀", "🌈", "⚡", "🎉", "🙏"
     ]
+
+    // --------------------------------------------------------
+    // MARK: - Premium Theme
+    // --------------------------------------------------------
+    private var appBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.03, green: 0.03, blue: 0.035)
+        : Color(red: 0.96, green: 0.96, blue: 0.97)
+    }
+
+    private var cardFill: Color {
+        colorScheme == .dark
+        ? Color(red: 0.09, green: 0.09, blue: 0.10)
+        : Color.white
+    }
+
+    private var rowFill: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.07)
+        : Color.black.opacity(0.045)
+    }
+
+    private var primaryText: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var secondaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.62)
+        : Color.black.opacity(0.52)
+    }
+
+    private var tertiaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.38)
+        : Color.black.opacity(0.34)
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.08)
+        : Color.black.opacity(0.07)
+    }
+
+    private var primaryButtonBackground: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var primaryButtonText: Color {
+        colorScheme == .dark ? .black : .white
+    }
+
+    private var shadowColor: Color {
+        colorScheme == .dark
+        ? Color.clear
+        : Color.black.opacity(0.06)
+    }
+
+    private func premiumCard(cornerRadius: CGFloat = 18) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(cardFill)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(borderColor, lineWidth: 1)
+            )
+            .shadow(
+                color: shadowColor,
+                radius: 12,
+                x: 0,
+                y: 6
+            )
+    }
+
+    private func premiumRow(cornerRadius: CGFloat = 14) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius)
+            .fill(rowFill)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(borderColor, lineWidth: 1)
+            )
+    }
 
     // --------------------------------------------------------
     // MARK: - Body
@@ -109,68 +198,61 @@ struct AddGoalView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 16) {
+                LazyVStack(spacing: 16) {
 
-                    // Presets
                     if !isEditMode {
                         presetGoalsSection
                     }
 
-                    // Duplicate error
                     if showingDuplicateError {
                         duplicateErrorBanner
-                            .transition(.move(edge: .top)
-                                .combined(with: .opacity))
+                            .transition(
+                                .move(edge: .top)
+                                .combined(with: .opacity)
+                            )
                     }
 
-                    // Name
                     goalNameSection
-
-                    // Priority
                     prioritySection
-
-                    // Category
                     categorySection
-
-                    // Goal type
                     goalTypeSection
 
-                    // Progress target (only for progress type)
                     if selectedType == .progress {
                         progressTargetSection
                     }
 
-                    // Icon
                     iconPickerSection
-
-                    // Repeat
                     repeatSection
-
-                    // Reminders
                     remindersSection
-
-                    Spacer(minLength: 20)
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .padding(.top, 12)
+                .padding(.bottom, 40)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(appBackground)
             .navigationTitle(isEditMode ? "Edit Goal" : "New Goal")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { dismiss() }
-                        .foregroundStyle(.secondary)
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundStyle(secondaryText)
                 }
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(isEditMode ? "Update" : "Add Goal") {
-                        Task { await saveGoal() }
+                        Task {
+                            await saveGoal()
+                        }
                     }
                     .fontWeight(.semibold)
                     .foregroundStyle(
-                        goalName.isEmpty ? Color.secondary : Color.purple
+                        goalName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? tertiaryText
+                        : primaryText
                     )
-                    .disabled(goalName.isEmpty)
+                    .disabled(goalName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .sheet(isPresented: $showingTimePicker) {
@@ -182,12 +264,15 @@ struct AddGoalView: View {
                         UIApplication.shared.open(url)
                     }
                 }
+
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("Enable notifications for MindSnap in iOS Settings to receive goal reminders.")
             }
             .alert("Manual Progress Still Works", isPresented: $showingHealthManualNotice) {
-                Button("OK") { dismiss() }
+                Button("OK") {
+                    dismiss()
+                }
             } message: {
                 Text("Health access was not enabled. MindSnap saved your goal, and you can still update this goal manually.")
             }
@@ -196,20 +281,26 @@ struct AddGoalView: View {
             if let goal = existingGoal {
                 loadExistingGoal(goal)
             }
+
             updateUnitsForActivity()
         }
         .onChange(of: goalName) { _, newName in
             let detected = GoalActivityType.detect(from: newName)
+
             if detected != .custom {
                 selectedActivityType = detected
                 updateUnitsForActivity()
+
                 if detected == .medicine {
                     selectedPriority = .high
                 }
             }
+
             let suggested = PresetGoal.suggestEmoji(for: newName)
+
             if suggested != "⭐" {
                 aiSuggestedEmoji = suggested
+
                 withAnimation(.spring(duration: 0.3)) {
                     selectedEmoji = suggested
                 }
@@ -230,20 +321,24 @@ struct AddGoalView: View {
     private var duplicateErrorBanner: some View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(.yellow)
+                .foregroundStyle(.orange)
                 .font(.subheadline)
+
             Text("'\(goalName)' already exists in today's goals!")
                 .font(.caption)
-                .foregroundStyle(.primary)
+                .fontWeight(.medium)
+                .foregroundStyle(primaryText)
                 .fixedSize(horizontal: false, vertical: true)
+
+            Spacer()
         }
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.yellow.opacity(colorScheme == .dark ? 0.15 : 0.1))
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.orange.opacity(colorScheme == .dark ? 0.13 : 0.07))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.yellow.opacity(0.4), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.orange.opacity(0.20), lineWidth: 1)
                 )
         )
     }
@@ -256,7 +351,10 @@ struct AddGoalView: View {
             HStack {
                 Label("Quick Add", systemImage: "bolt.fill")
                     .font(.headline)
+                    .foregroundStyle(primaryText)
+
                 Spacer()
+
                 Button {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         showingPresets.toggle()
@@ -264,8 +362,18 @@ struct AddGoalView: View {
                 } label: {
                     Image(systemName: showingPresets ? "chevron.up" : "chevron.down")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryText)
+                        .frame(width: 30, height: 30)
+                        .background(
+                            Circle()
+                                .fill(rowFill)
+                                .overlay(
+                                    Circle()
+                                        .stroke(borderColor, lineWidth: 1)
+                                )
+                        )
                 }
+                .buttonStyle(.plain)
             }
 
             if showingPresets {
@@ -285,27 +393,31 @@ struct AddGoalView: View {
             }
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 16).fill(cardFill))
+        .background(premiumCard(cornerRadius: 20))
     }
 
     private func presetCard(preset: PresetGoal) -> some View {
         Button {
             applyPreset(preset)
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: 7) {
                 ZStack {
                     Circle()
                         .fill(
-                            LinearGradient(
-                                colors: [
-                                    preset.activityType.color.opacity(colorScheme == .dark ? 0.35 : 0.2),
-                                    preset.activityType.secondaryColor.opacity(colorScheme == .dark ? 0.2 : 0.1)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                            preset.activityType.color.opacity(
+                                colorScheme == .dark ? 0.20 : 0.11
                             )
                         )
                         .frame(width: 48, height: 48)
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    preset.activityType.color.opacity(
+                                        colorScheme == .dark ? 0.24 : 0.16
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
 
                     Image(systemName: preset.sfSymbol)
                         .symbolRenderingMode(.palette)
@@ -313,17 +425,19 @@ struct AddGoalView: View {
                             preset.activityType.color,
                             preset.activityType.secondaryColor
                         )
-                        .font(.system(size: 18))
+                        .font(.system(size: 18, weight: .semibold))
 
                     if preset.priority == .high {
                         VStack {
                             HStack {
                                 Spacer()
+
                                 Circle()
                                     .fill(Color.red)
                                     .frame(width: 10, height: 10)
                                     .offset(x: 2, y: -2)
                             }
+
                             Spacer()
                         }
                         .frame(width: 48, height: 48)
@@ -332,14 +446,14 @@ struct AddGoalView: View {
 
                 Text(preset.name)
                     .font(.caption2)
-                    .fontWeight(.medium)
-                    .foregroundStyle(.primary)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(primaryText)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
             }
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 14).fill(rowFill))
+            .background(premiumRow(cornerRadius: 16))
         }
         .buttonStyle(.plain)
     }
@@ -349,10 +463,7 @@ struct AddGoalView: View {
     // --------------------------------------------------------
     private var goalNameSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Goal Name", systemImage: "pencil")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+            sectionLabel("Goal Name", systemImage: "pencil")
 
             HStack(spacing: 12) {
                 Button {
@@ -362,38 +473,52 @@ struct AddGoalView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(selectedCategory.color.opacity(colorScheme == .dark ? 0.25 : 0.12))
-                            .frame(width: 52, height: 52)
-                            .overlay(
-                                Circle().stroke(
-                                    selectedCategory.color.opacity(colorScheme == .dark ? 0.5 : 0.2),
-                                    lineWidth: 1.5
+                            .fill(
+                                selectedCategory.color.opacity(
+                                    colorScheme == .dark ? 0.18 : 0.10
                                 )
                             )
+                            .frame(width: 52, height: 52)
+                            .overlay(
+                                Circle()
+                                    .stroke(
+                                        selectedCategory.color.opacity(
+                                            colorScheme == .dark ? 0.30 : 0.16
+                                        ),
+                                        lineWidth: 1
+                                    )
+                            )
+
                         Text(selectedEmoji)
                             .font(.system(size: 26))
                     }
                 }
                 .buttonStyle(.plain)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 5) {
                     TextField("e.g. Morning Run, Take Medicine...", text: $goalName)
                         .font(.body)
+                        .foregroundStyle(primaryText)
+                        .tint(primaryText)
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled(false)
 
                     if !aiSuggestedEmoji.isEmpty && aiSuggestedEmoji != "⭐" {
                         HStack(spacing: 4) {
                             Image(systemName: "sparkles")
                                 .font(.caption2)
-                                .foregroundStyle(.purple)
-                            Text("AI suggested \(aiSuggestedEmoji)")
+                                .foregroundStyle(primaryText)
+
+                            Text("Suggested \(aiSuggestedEmoji)")
                                 .font(.caption2)
-                                .foregroundStyle(.purple)
+                                .fontWeight(.medium)
+                                .foregroundStyle(secondaryText)
                         }
                     }
                 }
             }
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 14).fill(cardFill))
+            .background(premiumCard(cornerRadius: 18))
 
             if showingEmojiPicker {
                 emojiPickerGrid
@@ -403,11 +528,11 @@ struct AddGoalView: View {
     }
 
     private var emojiPickerGrid: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Choose Emoji")
                 .font(.caption)
                 .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(secondaryText)
 
             LazyVGrid(
                 columns: Array(repeating: GridItem(.flexible()), count: 10),
@@ -416,17 +541,23 @@ struct AddGoalView: View {
                 ForEach(customEmojis, id: \.self) { emoji in
                     Button {
                         selectedEmoji = emoji
-                        withAnimation { showingEmojiPicker = false }
+
+                        withAnimation {
+                            showingEmojiPicker = false
+                        }
                     } label: {
                         Text(emoji)
                             .font(.title3)
                             .frame(width: 32, height: 32)
                             .background(
-                                Circle().fill(
-                                    selectedEmoji == emoji
-                                        ? selectedCategory.color.opacity(0.2)
+                                Circle()
+                                    .fill(
+                                        selectedEmoji == emoji
+                                        ? selectedCategory.color.opacity(
+                                            colorScheme == .dark ? 0.20 : 0.12
+                                        )
                                         : Color.clear
-                                )
+                                    )
                             )
                     }
                     .buttonStyle(.plain)
@@ -434,7 +565,7 @@ struct AddGoalView: View {
             }
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 14).fill(cardFill))
+        .background(premiumCard(cornerRadius: 18))
     }
 
     // --------------------------------------------------------
@@ -442,10 +573,7 @@ struct AddGoalView: View {
     // --------------------------------------------------------
     private var prioritySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Priority", systemImage: "exclamationmark.circle.fill")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+            sectionLabel("Priority", systemImage: "exclamationmark.circle.fill")
 
             HStack(spacing: 10) {
                 ForEach(GoalPriority.allCases, id: \.self) { priority in
@@ -453,54 +581,81 @@ struct AddGoalView: View {
                 }
             }
 
-            HStack(spacing: 6) {
+            HStack(spacing: 7) {
                 Image(systemName: selectedPriority.icon)
                     .font(.caption)
                     .foregroundStyle(selectedPriority.color)
+
                 Text(selectedPriority.description)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
             }
             .padding(10)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: 12)
                     .fill(selectedPriority.color.opacity(colorScheme == .dark ? 0.12 : 0.07))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(selectedPriority.color.opacity(0.16), lineWidth: 1)
+                    )
             )
         }
     }
 
     private func priorityCard(priority: GoalPriority) -> some View {
         let isSelected = selectedPriority == priority
+
         return Button {
             withAnimation(.spring(duration: 0.3, bounce: 0.3)) {
                 selectedPriority = priority
             }
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: 7) {
                 ZStack {
                     Circle()
-                        .fill(isSelected ? priority.color : Color(.systemGray5))
-                        .frame(width: 36, height: 36)
+                        .fill(
+                            isSelected
+                            ? priority.color
+                            : rowFill
+                        )
+                        .frame(width: 38, height: 38)
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    isSelected ? Color.clear : borderColor,
+                                    lineWidth: 1
+                                )
+                        )
+
                     Image(systemName: priority.icon)
-                        .font(.system(size: 14))
+                        .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(isSelected ? .white : priority.color)
                 }
-                .scaleEffect(isSelected ? 1.1 : 1.0)
-                .animation(.spring(duration: 0.3, bounce: 0.3), value: isSelected)
+                .scaleEffect(isSelected ? 1.08 : 1.0)
 
                 Text(priority.displayName)
                     .font(.caption2)
-                    .fontWeight(isSelected ? .bold : .regular)
-                    .foregroundStyle(isSelected ? priority.color : .secondary)
+                    .fontWeight(isSelected ? .bold : .medium)
+                    .foregroundStyle(isSelected ? priority.color : secondaryText)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? priority.color.opacity(colorScheme == .dark ? 0.15 : 0.08) : cardFill)
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(
+                        isSelected
+                        ? priority.color.opacity(colorScheme == .dark ? 0.14 : 0.075)
+                        : cardFill
+                    )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? priority.color.opacity(0.4) : Color.clear, lineWidth: 1.5)
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(
+                                isSelected
+                                ? priority.color.opacity(0.34)
+                                : borderColor,
+                                lineWidth: 1
+                            )
                     )
             )
         }
@@ -512,10 +667,7 @@ struct AddGoalView: View {
     // --------------------------------------------------------
     private var categorySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Category", systemImage: "square.grid.2x2")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+            sectionLabel("Category", systemImage: "square.grid.2x2")
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
@@ -531,6 +683,7 @@ struct AddGoalView: View {
 
     private func categoryPill(category: GoalCategory) -> some View {
         let isSelected = selectedCategory == category
+
         return Button {
             withAnimation(.spring(duration: 0.3, bounce: 0.3)) {
                 selectedCategory = category
@@ -540,15 +693,15 @@ struct AddGoalView: View {
                 Image(systemName: category.symbol)
                     .symbolRenderingMode(.palette)
                     .foregroundStyle(
-                        isSelected ? .white : category.color,
-                        isSelected ? .white.opacity(0.7) : category.secondaryColor
+                        isSelected ? primaryButtonText : category.color,
+                        isSelected ? primaryButtonText.opacity(0.70) : category.secondaryColor
                     )
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .semibold))
 
                 Text(category.rawValue)
                     .font(.caption)
                     .fontWeight(.semibold)
-                    .foregroundStyle(isSelected ? .white : .primary)
+                    .foregroundStyle(isSelected ? primaryButtonText : primaryText)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
@@ -556,29 +709,20 @@ struct AddGoalView: View {
                 Capsule()
                     .fill(
                         isSelected
-                            ? LinearGradient(
-                                colors: [category.color, category.secondaryColor],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                              )
-                            : LinearGradient(
-                                colors: [
-                                    category.color.opacity(colorScheme == .dark ? 0.2 : 0.1),
-                                    category.color.opacity(colorScheme == .dark ? 0.15 : 0.07)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                              )
+                        ? primaryButtonBackground
+                        : rowFill
                     )
                     .overlay(
-                        Capsule().stroke(
-                            category.color.opacity(isSelected ? 0 : colorScheme == .dark ? 0.3 : 0.15),
-                            lineWidth: 1
-                        )
+                        Capsule()
+                            .stroke(
+                                isSelected
+                                ? Color.clear
+                                : borderColor,
+                                lineWidth: 1
+                            )
                     )
             )
             .scaleEffect(isSelected ? 1.04 : 1.0)
-            .animation(.spring(duration: 0.3, bounce: 0.3), value: isSelected)
         }
         .buttonStyle(.plain)
     }
@@ -588,10 +732,7 @@ struct AddGoalView: View {
     // --------------------------------------------------------
     private var goalTypeSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Tracking Type", systemImage: "chart.bar.fill")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+            sectionLabel("Tracking Type", systemImage: "chart.bar.fill")
 
             HStack(spacing: 12) {
                 ForEach(GoalType.allCases, id: \.self) { type in
@@ -603,14 +744,19 @@ struct AddGoalView: View {
 
     private func goalTypeCard(type: GoalType) -> some View {
         let isSelected = selectedType == type
+
         return Button {
             withAnimation(.spring(duration: 0.3)) {
                 selectedType = type
+
                 if type == .checkbox {
                     targetValue = 1
                     selectedUnit = ""
                 } else {
-                    if targetValue <= 1 { targetValue = 5 }
+                    if targetValue <= 1 {
+                        targetValue = 5
+                    }
+
                     if selectedUnit.isEmpty {
                         selectedUnit = availableUnits.first?.label ?? "times"
                     }
@@ -622,43 +768,47 @@ struct AddGoalView: View {
                     Image(systemName: type.icon)
                         .symbolRenderingMode(.palette)
                         .foregroundStyle(
-                            isSelected ? selectedCategory.color : .secondary,
-                            isSelected ? selectedCategory.secondaryColor : Color(.systemGray4)
+                            isSelected ? selectedCategory.color : secondaryText,
+                            isSelected ? selectedCategory.secondaryColor : tertiaryText
                         )
                         .font(.title3)
+
                     Spacer()
+
                     if isSelected {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundStyle(selectedCategory.color)
                             .font(.caption)
                     }
                 }
+
                 Text(type.displayName)
                     .font(.caption)
                     .fontWeight(.bold)
-                    .foregroundStyle(isSelected ? .primary : .secondary)
+                    .foregroundStyle(primaryText)
+
                 Text(type.description)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(secondaryText)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: 16)
                     .fill(
                         isSelected
-                            ? selectedCategory.color.opacity(colorScheme == .dark ? 0.18 : 0.08)
-                            : cardFill
+                        ? selectedCategory.color.opacity(colorScheme == .dark ? 0.13 : 0.065)
+                        : cardFill
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: 16)
                             .stroke(
                                 isSelected
-                                    ? selectedCategory.color.opacity(0.4)
-                                    : Color.white.opacity(colorScheme == .dark ? 0.06 : 0),
-                                lineWidth: 1.5
+                                ? selectedCategory.color.opacity(0.30)
+                                : borderColor,
+                                lineWidth: 1
                             )
                     )
             )
@@ -671,136 +821,172 @@ struct AddGoalView: View {
     // --------------------------------------------------------
     private var progressTargetSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Daily Target", systemImage: "target")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+            sectionLabel("Daily Target", systemImage: "target")
 
             VStack(spacing: 14) {
-                // Stepper
-                HStack(spacing: 0) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Target Amount")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                targetAmountCard
 
-                        HStack(spacing: 14) {
-                            Button {
-                                if targetValue > 1 { targetValue -= smartDecrement }
-                            } label: {
-                                Image(systemName: "minus.circle.fill")
-                                    .font(.title)
-                                    .foregroundStyle(targetValue > 1 ? selectedCategory.color : Color(.systemGray4))
-                            }
-                            .buttonStyle(.plain)
-
-                            VStack(spacing: 2) {
-                                Text("\(targetValue)")
-                                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                                    .foregroundStyle(.primary)
-                                    .contentTransition(.numericText())
-                                    .animation(.spring(duration: 0.3), value: targetValue)
-                                    .frame(minWidth: 60)
-
-                                if !selectedUnit.isEmpty {
-                                    Text(selectedUnit)
-                                        .font(.caption)
-                                        .foregroundStyle(selectedCategory.color)
-                                        .fontWeight(.medium)
-                                }
-                            }
-
-                            Button {
-                                targetValue += smartIncrement
-                            } label: {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.title)
-                                    .foregroundStyle(selectedCategory.color)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 6) {
-                        Text("Quick set")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-
-                        LazyVGrid(
-                            columns: [GridItem(.flexible()), GridItem(.flexible())],
-                            spacing: 6
-                        ) {
-                            ForEach(quickValues, id: \.self) { value in
-                                Button {
-                                    withAnimation(.spring(duration: 0.3)) {
-                                        targetValue = value
-                                    }
-                                } label: {
-                                    Text("\(value)")
-                                        .font(.caption2)
-                                        .fontWeight(.semibold)
-                                        .foregroundStyle(targetValue == value ? .white : selectedCategory.color)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 5)
-                                        .background(
-                                            Capsule()
-                                                .fill(targetValue == value ? selectedCategory.color : selectedCategory.color.opacity(0.12))
-                                        )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .frame(width: 110)
-                    }
-                }
-                .padding(16)
-                .background(RoundedRectangle(cornerRadius: 14).fill(cardFill))
-
-                // Health warning
                 if showingHealthWarning && !healthWarning.isEmpty {
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                            .font(.caption)
-                        Text(healthWarning)
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.orange.opacity(colorScheme == .dark ? 0.15 : 0.08))
-                    )
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    healthWarningBanner
                 }
 
-                // Unit picker
                 if !availableUnits.isEmpty && selectedActivityType.needsUnit {
                     unitPickerSection
                 }
 
-                // Health suggestion
                 if !healthySuggestion.isEmpty {
-                    HStack(alignment: .top, spacing: 8) {
-                        Image(systemName: "heart.fill")
-                            .foregroundStyle(.green)
-                            .font(.caption)
-                        Text(healthySuggestion)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.green.opacity(colorScheme == .dark ? 0.12 : 0.07))
-                    )
+                    healthySuggestionBanner
                 }
             }
         }
+    }
+
+    private var targetAmountCard: some View {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Target Amount")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
+
+                HStack(spacing: 14) {
+                    Button {
+                        if targetValue > 1 {
+                            targetValue -= smartDecrement
+                        }
+                    } label: {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.title)
+                            .foregroundStyle(
+                                targetValue > 1
+                                ? selectedCategory.color
+                                : tertiaryText
+                            )
+                    }
+                    .buttonStyle(.plain)
+
+                    VStack(spacing: 2) {
+                        Text("\(targetValue)")
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .foregroundStyle(primaryText)
+                            .contentTransition(.numericText())
+                            .animation(.spring(duration: 0.3), value: targetValue)
+                            .frame(minWidth: 60)
+
+                        if !selectedUnit.isEmpty {
+                            Text(selectedUnit)
+                                .font(.caption)
+                                .foregroundStyle(selectedCategory.color)
+                                .fontWeight(.medium)
+                        }
+                    }
+
+                    Button {
+                        targetValue += smartIncrement
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title)
+                            .foregroundStyle(selectedCategory.color)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 7) {
+                Text("Quick set")
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
+
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible()),
+                        GridItem(.flexible())
+                    ],
+                    spacing: 6
+                ) {
+                    ForEach(quickValues, id: \.self) { value in
+                        Button {
+                            withAnimation(.spring(duration: 0.3)) {
+                                targetValue = value
+                            }
+                        } label: {
+                            Text("\(value)")
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(
+                                    targetValue == value
+                                    ? primaryButtonText
+                                    : selectedCategory.color
+                                )
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .background(
+                                    Capsule()
+                                        .fill(
+                                            targetValue == value
+                                            ? primaryButtonBackground
+                                            : selectedCategory.color.opacity(colorScheme == .dark ? 0.13 : 0.075)
+                                        )
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(width: 110)
+            }
+        }
+        .padding(16)
+        .background(premiumCard(cornerRadius: 18))
+    }
+
+    private var healthWarningBanner: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .font(.caption)
+
+            Text(healthWarning)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.orange.opacity(colorScheme == .dark ? 0.14 : 0.075))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.orange.opacity(0.18), lineWidth: 1)
+                )
+        )
+        .transition(.opacity.combined(with: .move(edge: .top)))
+    }
+
+    private var healthySuggestionBanner: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "heart.fill")
+                .foregroundStyle(.green)
+                .font(.caption)
+
+            Text(healthySuggestion)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundStyle(secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.green.opacity(colorScheme == .dark ? 0.11 : 0.065))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.green.opacity(0.14), lineWidth: 1)
+                )
+        )
     }
 
     private var unitPickerSection: some View {
@@ -808,7 +994,7 @@ struct AddGoalView: View {
             Text("Unit")
                 .font(.caption)
                 .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(secondaryText)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -822,38 +1008,33 @@ struct AddGoalView: View {
                             Text(unit.label)
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
-                                .foregroundStyle(selectedUnit == unit.label ? .white : selectedCategory.color)
+                                .foregroundStyle(
+                                    selectedUnit == unit.label
+                                    ? primaryButtonText
+                                    : selectedCategory.color
+                                )
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 8)
                                 .background(
                                     Capsule()
                                         .fill(
                                             selectedUnit == unit.label
-                                                ? LinearGradient(
-                                                    colors: [selectedCategory.color, selectedCategory.secondaryColor],
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                  )
-                                                : LinearGradient(
-                                                    colors: [
-                                                        selectedCategory.color.opacity(colorScheme == .dark ? 0.2 : 0.1),
-                                                        selectedCategory.color.opacity(colorScheme == .dark ? 0.15 : 0.07)
-                                                    ],
-                                                    startPoint: .leading,
-                                                    endPoint: .trailing
-                                                  )
+                                            ? primaryButtonBackground
+                                            : rowFill
                                         )
                                         .overlay(
-                                            Capsule().stroke(
-                                                selectedCategory.color.opacity(selectedUnit == unit.label ? 0 : colorScheme == .dark ? 0.3 : 0.2),
-                                                lineWidth: 1
-                                            )
+                                            Capsule()
+                                                .stroke(
+                                                    selectedUnit == unit.label
+                                                    ? Color.clear
+                                                    : borderColor,
+                                                    lineWidth: 1
+                                                )
                                         )
                                 )
                         }
                         .buttonStyle(.plain)
                         .scaleEffect(selectedUnit == unit.label ? 1.05 : 1.0)
-                        .animation(.spring(duration: 0.3, bounce: 0.3), value: selectedUnit)
                     }
                 }
                 .padding(.horizontal, 2)
@@ -867,10 +1048,7 @@ struct AddGoalView: View {
     // --------------------------------------------------------
     private var iconPickerSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Icon", systemImage: "square.grid.3x3")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+            sectionLabel("Icon", systemImage: "square.grid.3x3")
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
@@ -886,6 +1064,7 @@ struct AddGoalView: View {
 
     private func symbolButton(symbol: String, name: String) -> some View {
         let isSelected = selectedSymbol == symbol
+
         return Button {
             withAnimation(.spring(duration: 0.3, bounce: 0.3)) {
                 selectedSymbol = symbol
@@ -896,36 +1075,31 @@ struct AddGoalView: View {
                     Circle()
                         .fill(
                             isSelected
-                                ? LinearGradient(
-                                    colors: [selectedCategory.color, selectedCategory.secondaryColor],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                  )
-                                : LinearGradient(
-                                    colors: [
-                                        colorScheme == .dark ? Color.white.opacity(0.1) : Color(.systemGray5),
-                                        colorScheme == .dark ? Color.white.opacity(0.08) : Color(.systemGray5)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                  )
+                            ? primaryButtonBackground
+                            : rowFill
                         )
                         .frame(width: 50, height: 50)
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    isSelected ? Color.clear : borderColor,
+                                    lineWidth: 1
+                                )
+                        )
 
                     Image(systemName: symbol)
                         .symbolRenderingMode(isSelected ? .monochrome : .palette)
                         .foregroundStyle(
-                            isSelected ? .white : selectedCategory.color,
-                            isSelected ? .white.opacity(0.7) : selectedCategory.secondaryColor
+                            isSelected ? primaryButtonText : selectedCategory.color,
+                            isSelected ? primaryButtonText.opacity(0.70) : selectedCategory.secondaryColor
                         )
-                        .font(.system(size: 20))
+                        .font(.system(size: 20, weight: .semibold))
                 }
-                .scaleEffect(isSelected ? 1.1 : 1.0)
-                .animation(.spring(duration: 0.3, bounce: 0.4), value: isSelected)
+                .scaleEffect(isSelected ? 1.08 : 1.0)
 
                 Text(name)
                     .font(.system(size: 9))
-                    .foregroundStyle(isSelected ? selectedCategory.color : .secondary)
+                    .foregroundStyle(isSelected ? primaryText : secondaryText)
                     .fontWeight(isSelected ? .semibold : .regular)
             }
         }
@@ -937,42 +1111,48 @@ struct AddGoalView: View {
     // --------------------------------------------------------
     private var repeatSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Repeat Schedule", systemImage: "arrow.clockwise")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+            sectionLabel("Repeat Schedule", systemImage: "arrow.clockwise")
 
             VStack(spacing: 0) {
                 ForEach(GoalRepeatType.allCases, id: \.self) { repeatType in
                     repeatTypeRow(repeatType: repeatType)
+
                     if repeatType != GoalRepeatType.allCases.last {
-                        Divider().padding(.leading, 44)
+                        Divider()
+                            .padding(.leading, 44)
                     }
                 }
 
                 if selectedRepeatType == .custom {
                     Divider()
+
                     customDaySelector
                         .padding(14)
                         .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
-            .background(RoundedRectangle(cornerRadius: 14).fill(cardFill))
+            .background(premiumCard(cornerRadius: 18))
             .animation(.easeInOut(duration: 0.2), value: selectedRepeatType)
 
             if selectedRepeatType == .none {
-                HStack(spacing: 6) {
+                HStack(spacing: 7) {
                     Image(systemName: "1.circle.fill")
                         .foregroundStyle(.orange)
                         .font(.caption)
+
                     Text("This goal will only appear today and automatically disappear tomorrow.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .fontWeight(.medium)
+                        .foregroundStyle(secondaryText)
                 }
                 .padding(10)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: 12)
                         .fill(Color.orange.opacity(colorScheme == .dark ? 0.12 : 0.07))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.orange.opacity(0.16), lineWidth: 1)
+                        )
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -986,19 +1166,27 @@ struct AddGoalView: View {
         return HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(isSelected ? accentColor : Color(.systemGray5))
+                    .fill(isSelected ? accentColor : rowFill)
                     .frame(width: 30, height: 30)
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                isSelected ? Color.clear : borderColor,
+                                lineWidth: 1
+                            )
+                    )
+
                 Image(systemName: repeatType.icon)
-                    .font(.system(size: 12))
-                    .foregroundStyle(isSelected ? .white : .secondary)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isSelected ? .white : secondaryText)
             }
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(repeatType.rawValue)
                         .font(.subheadline)
                         .fontWeight(.medium)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(primaryText)
 
                     if repeatType == .none {
                         Text("Today only")
@@ -1010,27 +1198,32 @@ struct AddGoalView: View {
                             .background(Capsule().fill(Color.orange))
                     }
                 }
+
                 Text(repeatType.description)
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(secondaryText)
             }
 
             Spacer()
 
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(isSelected ? accentColor : Color(.systemGray4))
+                .foregroundStyle(isSelected ? accentColor : tertiaryText)
                 .font(.title3)
         }
         .padding(14)
         .contentShape(Rectangle())
-        .background(isSelected ? accentColor.opacity(colorScheme == .dark ? 0.12 : 0.06) : Color.clear)
+        .background(
+            isSelected
+            ? accentColor.opacity(colorScheme == .dark ? 0.11 : 0.055)
+            : Color.clear
+        )
         .onTapGesture {
             withAnimation(.easeInOut(duration: 0.2)) {
                 selectedRepeatType = repeatType
             }
+
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
         }
-        .animation(.easeInOut(duration: 0.2), value: isSelected)
     }
 
     private var customDaySelector: some View {
@@ -1038,11 +1231,12 @@ struct AddGoalView: View {
             Text("Select Days")
                 .font(.caption)
                 .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(secondaryText)
 
             HStack(spacing: 8) {
                 ForEach(1...7, id: \.self) { day in
                     let isSelected = customRepeatDays.contains(day)
+
                     Button {
                         withAnimation(.spring(duration: 0.3, bounce: 0.3)) {
                             if isSelected {
@@ -1058,15 +1252,20 @@ struct AddGoalView: View {
                         Text(dayLabels[day - 1])
                             .font(.caption2)
                             .fontWeight(.bold)
-                            .foregroundStyle(isSelected ? .white : .secondary)
+                            .foregroundStyle(isSelected ? primaryButtonText : secondaryText)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 8)
                             .background(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .fill(isSelected ? selectedCategory.color : Color(.systemGray5))
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(isSelected ? primaryButtonBackground : rowFill)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(
+                                                isSelected ? Color.clear : borderColor,
+                                                lineWidth: 1
+                                            )
+                                    )
                             )
-                            .scaleEffect(isSelected ? 1.05 : 1.0)
-                            .animation(.spring(duration: 0.2), value: isSelected)
                     }
                     .buttonStyle(.plain)
                 }
@@ -1079,72 +1278,81 @@ struct AddGoalView: View {
     // --------------------------------------------------------
     private var remindersSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Reminders", systemImage: "bell.fill")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
+            sectionLabel("Reminders", systemImage: "bell.fill")
 
             VStack(spacing: 0) {
                 if reminders.isEmpty {
                     HStack {
                         Image(systemName: "bell.slash")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(secondaryText)
                             .font(.caption)
+
                         Text("No reminders set")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(secondaryText)
+
                         Spacer()
                     }
                     .padding(16)
                 } else {
                     ForEach(reminders) { reminder in
                         reminderRow(reminder: reminder)
+
                         if reminder.id != reminders.last?.id {
-                            Divider().padding(.leading, 44)
+                            Divider()
+                                .padding(.leading, 44)
                         }
                     }
                 }
 
                 Divider()
 
-                // Add reminder button — requests permission on tap
                 Button {
                     requestPermissionThenShowPicker()
                 } label: {
                     HStack(spacing: 10) {
                         ZStack {
                             Circle()
-                                .fill(selectedCategory.color)
-                                .frame(width: 28, height: 28)
+                                .fill(primaryButtonBackground)
+                                .frame(width: 30, height: 30)
+
                             Image(systemName: "plus")
                                 .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(.white)
+                                .foregroundStyle(primaryButtonText)
                         }
+
                         Text("Add Reminder")
                             .font(.subheadline)
                             .fontWeight(.medium)
-                            .foregroundStyle(selectedCategory.color)
+                            .foregroundStyle(primaryText)
+
                         Spacer()
                     }
                     .padding(14)
                 }
                 .buttonStyle(.plain)
             }
-            .background(RoundedRectangle(cornerRadius: 14).fill(cardFill))
+            .background(premiumCard(cornerRadius: 18))
 
             if selectedActivityType == .medicine {
-                HStack(spacing: 6) {
+                HStack(spacing: 7) {
                     Image(systemName: "pills.fill")
                         .foregroundStyle(.red)
                         .font(.caption)
+
                     Text("Medicine reminders use prominent, time-sensitive alerts when available.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .fontWeight(.medium)
+                        .foregroundStyle(secondaryText)
                 }
                 .padding(10)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: 12)
                         .fill(Color.red.opacity(colorScheme == .dark ? 0.12 : 0.07))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.red.opacity(0.15), lineWidth: 1)
+                        )
                 )
             }
         }
@@ -1154,17 +1362,18 @@ struct AddGoalView: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(selectedCategory.color.opacity(colorScheme == .dark ? 0.25 : 0.12))
+                    .fill(selectedCategory.color.opacity(colorScheme == .dark ? 0.18 : 0.10))
                     .frame(width: 32, height: 32)
+
                 Image(systemName: "bell.fill")
-                    .font(.system(size: 12))
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(selectedCategory.color)
             }
 
             Text(reminder.timeString)
                 .font(.subheadline)
                 .fontWeight(.medium)
-                .foregroundStyle(.primary)
+                .foregroundStyle(primaryText)
 
             Spacer()
 
@@ -1184,7 +1393,6 @@ struct AddGoalView: View {
 
     // --------------------------------------------------------
     // MARK: - Request Permission then show picker
-    // FIX: Permission requested HERE when user taps Add Reminder
     // --------------------------------------------------------
     private func requestPermissionThenShowPicker() {
         UNUserNotificationCenter.current().getNotificationSettings { settings in
@@ -1192,8 +1400,12 @@ struct AddGoalView: View {
                 switch settings.authorizationStatus {
                 case .authorized, .provisional:
                     newReminderTime = Calendar.current.date(
-                        bySettingHour: 8, minute: 0, second: 0, of: Date()
+                        bySettingHour: 8,
+                        minute: 0,
+                        second: 0,
+                        of: Date()
                     ) ?? Date()
+
                     showingTimePicker = true
 
                 case .notDetermined:
@@ -1203,8 +1415,12 @@ struct AddGoalView: View {
                         DispatchQueue.main.async {
                             if granted {
                                 newReminderTime = Calendar.current.date(
-                                    bySettingHour: 8, minute: 0, second: 0, of: Date()
+                                    bySettingHour: 8,
+                                    minute: 0,
+                                    second: 0,
+                                    of: Date()
                                 ) ?? Date()
+
                                 showingTimePicker = true
                             } else {
                                 showingPermissionDenied = true
@@ -1230,25 +1446,22 @@ struct AddGoalView: View {
             VStack(spacing: 24) {
                 ZStack {
                     Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    selectedCategory.color.opacity(0.2),
-                                    selectedCategory.secondaryColor.opacity(0.1)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                        .fill(rowFill)
+                        .frame(width: 82, height: 82)
+                        .overlay(
+                            Circle()
+                                .stroke(borderColor, lineWidth: 1)
                         )
-                        .frame(width: 80, height: 80)
+
                     Image(systemName: "bell.fill")
-                        .font(.system(size: 36))
-                        .foregroundStyle(selectedCategory.color)
+                        .font(.system(size: 34, weight: .semibold))
+                        .foregroundStyle(primaryText)
                 }
                 .padding(.top, 20)
 
                 Text("Set Reminder Time")
                     .font(.headline)
+                    .foregroundStyle(primaryText)
 
                 DatePicker(
                     "Reminder Time",
@@ -1265,24 +1478,20 @@ struct AddGoalView: View {
                     Text("Add Reminder")
                         .font(.headline)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(primaryButtonText)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
                             Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [selectedCategory.color, selectedCategory.secondaryColor],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
+                                .fill(primaryButtonBackground)
                         )
                 }
+                .buttonStyle(.plain)
                 .padding(.horizontal, 24)
 
                 Spacer()
             }
+            .background(appBackground)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -1290,11 +1499,14 @@ struct AddGoalView: View {
                         addReminderFromPicker()
                     }
                     .fontWeight(.semibold)
-                    .foregroundStyle(selectedCategory.color)
+                    .foregroundStyle(primaryText)
                 }
+
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") { showingTimePicker = false }
-                        .foregroundStyle(.secondary)
+                    Button("Cancel") {
+                        showingTimePicker = false
+                    }
+                    .foregroundStyle(secondaryText)
                 }
             }
         }
@@ -1303,18 +1515,16 @@ struct AddGoalView: View {
     }
 
     // --------------------------------------------------------
-    // MARK: - Adaptive Colors
+    // MARK: - Shared Section Label
     // --------------------------------------------------------
-    private var cardFill: Color {
-        colorScheme == .dark
-            ? Color(red: 0.17, green: 0.17, blue: 0.18)
-            : Color.white
-    }
-
-    private var rowFill: Color {
-        colorScheme == .dark
-            ? Color(red: 0.2, green: 0.2, blue: 0.22)
-            : Color(.systemGray6)
+    private func sectionLabel(
+        _ title: String,
+        systemImage: String
+    ) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.subheadline)
+            .fontWeight(.semibold)
+            .foregroundStyle(secondaryText)
     }
 
     // --------------------------------------------------------
@@ -1322,31 +1532,46 @@ struct AddGoalView: View {
     // --------------------------------------------------------
     private var smartIncrement: Int {
         switch selectedUnit {
-        case "steps": return 500
-        case "ml":    return 100
-        default:      return 1
+        case "steps":
+            return 500
+        case "ml":
+            return 100
+        default:
+            return 1
         }
     }
 
     private var smartDecrement: Int {
         switch selectedUnit {
-        case "steps": return 500
-        case "ml":    return 100
-        default:      return 1
+        case "steps":
+            return 500
+        case "ml":
+            return 100
+        default:
+            return 1
         }
     }
 
     private var quickValues: [Int] {
         switch selectedUnit {
-        case "glasses": return [6, 8, 10, 12]
-        case "steps":   return [5000, 8000, 10000, 15000]
-        case "minutes": return [15, 30, 45, 60]
-        case "hours":   return [1, 2, 4, 8]
-        case "km":      return [1, 3, 5, 10]
-        case "miles":   return [1, 3, 5, 10]
-        case "pages":   return [10, 20, 30, 50]
-        case "ml":      return [500, 1000, 1500, 2000]
-        default:        return [1, 2, 3, 5]
+        case "glasses":
+            return [6, 8, 10, 12]
+        case "steps":
+            return [5000, 8000, 10000, 15000]
+        case "minutes":
+            return [15, 30, 45, 60]
+        case "hours":
+            return [1, 2, 4, 8]
+        case "km":
+            return [1, 3, 5, 10]
+        case "miles":
+            return [1, 3, 5, 10]
+        case "pages":
+            return [10, 20, 30, 50]
+        case "ml":
+            return [500, 1000, 1500, 2000]
+        default:
+            return [1, 2, 3, 5]
         }
     }
 
@@ -1355,7 +1580,9 @@ struct AddGoalView: View {
     // --------------------------------------------------------
     private func updateUnitsForActivity() {
         availableUnits = selectedActivityType.unitOptions
-        if selectedUnit.isEmpty || !availableUnits.map({ $0.label }).contains(selectedUnit) {
+
+        if selectedUnit.isEmpty ||
+            !availableUnits.map({ $0.label }).contains(selectedUnit) {
             selectedUnit = availableUnits.first?.label ?? ""
             healthySuggestion = availableUnits.first?.suggestion ?? ""
         }
@@ -1367,11 +1594,18 @@ struct AddGoalView: View {
             healthWarning = ""
             return
         }
+
         if selectedUnit == limit.unit && value > limit.maxValue {
             healthWarning = limit.warningMessage
-            withAnimation(.easeInOut(duration: 0.3)) { showingHealthWarning = true }
+
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showingHealthWarning = true
+            }
         } else {
-            withAnimation(.easeInOut(duration: 0.3)) { showingHealthWarning = false }
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showingHealthWarning = false
+            }
+
             healthWarning = ""
         }
     }
@@ -1389,11 +1623,13 @@ struct AddGoalView: View {
         if !isDuplicate {
             withAnimation(.spring(duration: 0.3)) {
                 reminders.append(newReminder)
+
                 reminders.sort {
                     ($0.hour * 60 + $0.minute) <
                     ($1.hour * 60 + $1.minute)
                 }
             }
+
             UINotificationFeedbackGenerator()
                 .notificationOccurred(.success)
         }
@@ -1413,13 +1649,17 @@ struct AddGoalView: View {
             targetValue = preset.targetValue
             selectedRepeatType = preset.repeatType
             showingPresets = false
+
             updateUnitsForActivity()
+
             selectedUnit = preset.unit.isEmpty
                 ? (availableUnits.first?.label ?? "")
                 : preset.unit
+
             healthySuggestion = availableUnits
                 .first(where: { $0.label == selectedUnit })?.suggestion ?? ""
         }
+
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 
@@ -1434,12 +1674,14 @@ struct AddGoalView: View {
         targetValue = goal.targetValue
         selectedRepeatType = goal.repeatType
         customRepeatDays = goal.customRepeatDaysArray
-        // FIX: Goal uses [ReminderTime] — no hasReminder/reminderTime
         reminders = goal.reminders
+
         updateUnitsForActivity()
+
         selectedUnit = goal.unit.isEmpty
             ? (availableUnits.first?.label ?? "")
             : goal.unit
+
         healthySuggestion = availableUnits
             .first(where: { $0.label == selectedUnit })?.suggestion ?? ""
     }
@@ -1448,47 +1690,56 @@ struct AddGoalView: View {
     // MARK: - Save Goal
     // --------------------------------------------------------
     private func saveGoal() async {
-        // Duplicate check (new goals only)
-        if !isEditMode && viewModel.isDuplicateGoal(name: goalName) {
-            withAnimation(.spring(duration: 0.3)) { showingDuplicateError = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                withAnimation { self.showingDuplicateError = false }
+        let trimmedName = goalName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !isEditMode && viewModel.isDuplicateGoal(name: trimmedName) {
+            withAnimation(.spring(duration: 0.3)) {
+                showingDuplicateError = true
             }
-            UINotificationFeedbackGenerator().notificationOccurred(.error)
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                withAnimation {
+                    self.showingDuplicateError = false
+                }
+            }
+
+            UINotificationFeedbackGenerator()
+                .notificationOccurred(.error)
+
             return
         }
 
         var shouldShowManualHealthNotice = false
+
         if shouldRequestHealthAccess {
             let granted = await viewModel.requestHealthKitAccess()
+
             if granted {
                 isHealthSyncEnabled = true
             }
+
             shouldShowManualHealthNotice = !granted
         }
 
         if let existing = existingGoal {
-            // ---- EDIT MODE ----
             viewModel.updateGoal(
                 existing,
-                name: goalName,
+                name: trimmedName,
                 emoji: selectedEmoji,
                 sfSymbol: selectedSymbol,
                 category: selectedCategory,
                 activityType: selectedActivityType,
                 priority: selectedPriority,
-                goalType: selectedType,           // ADD
-                targetValue: targetValue,          // ADD
-                unit: selectedUnit,                // ADD
+                goalType: selectedType,
+                targetValue: targetValue,
+                unit: selectedUnit,
                 repeatType: selectedRepeatType,
                 customRepeatDays: customRepeatDays,
                 reminders: reminders
             )
         } else {
-            // ---- CREATE MODE ----
-            // FIX: activityType before goalType
             viewModel.addGoal(
-                name: goalName,
+                name: trimmedName,
                 emoji: selectedEmoji,
                 sfSymbol: selectedSymbol,
                 category: selectedCategory,
@@ -1502,6 +1753,7 @@ struct AddGoalView: View {
                 reminders: reminders
             )
         }
+
         if shouldShowManualHealthNotice {
             showingHealthManualNotice = true
         } else {
@@ -1510,16 +1762,22 @@ struct AddGoalView: View {
     }
 
     // --------------------------------------------------------
-    // MARK: - sfSymbolFor (correct GoalCategory cases)
+    // MARK: - sfSymbolFor
     // --------------------------------------------------------
     private func sfSymbolFor(category: GoalCategory) -> String {
         switch category {
-        case .fitness:    return "figure.run"
-        case .mind:       return "brain.head.profile"
-        case .health:     return "heart.fill"
-        case .social:     return "person.2.fill"
-        case .creativity: return "paintbrush.fill"
-        case .custom:     return "star.fill"
+        case .fitness:
+            return "figure.run"
+        case .mind:
+            return "brain.head.profile"
+        case .health:
+            return "heart.fill"
+        case .social:
+            return "person.2.fill"
+        case .creativity:
+            return "paintbrush.fill"
+        case .custom:
+            return "star.fill"
         }
     }
 }
@@ -1530,10 +1788,13 @@ struct AddGoalView: View {
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
-        for: Goal.self, GoalCompletion.self,
+        for: Goal.self,
+        GoalCompletion.self,
         configurations: config
     )
+
     let viewModel = GoalViewModel(modelContext: container.mainContext)
+
     AddGoalView(viewModel: viewModel)
         .modelContainer(container)
 }
@@ -1541,10 +1802,13 @@ struct AddGoalView: View {
 #Preview("Edit Mode") {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
-        for: Goal.self, GoalCompletion.self,
+        for: Goal.self,
+        GoalCompletion.self,
         configurations: config
     )
+
     let viewModel = GoalViewModel(modelContext: container.mainContext)
+
     let goal = Goal(
         name: "Morning Run",
         emoji: "🏃",
@@ -1556,6 +1820,7 @@ struct AddGoalView: View {
         targetValue: 5,
         unit: "km"
     )
+
     AddGoalView(viewModel: viewModel, existingGoal: goal)
         .modelContainer(container)
 }

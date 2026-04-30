@@ -689,27 +689,42 @@ struct StepDot: Identifiable {
 // ============================================================
 // PointsPopupView — Floats up when points earned
 // ============================================================
+// ============================================================
+// PointsPopupView — Floats up when points earned
+// ============================================================
 struct PointsPopupView: View {
 
     let points: Int
     let isShowing: Bool
 
+    @Environment(\.colorScheme) private var colorScheme
+
     @State private var offset: CGFloat = 0
     @State private var opacity: Double = 0
+
+    private var popupBackground: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var popupText: Color {
+        colorScheme == .dark ? .black : .white
+    }
 
     var body: some View {
         Text("+\(points) ⭐")
             .font(.headline)
             .fontWeight(.bold)
-            .foregroundStyle(.yellow)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .foregroundStyle(popupText)
+            .padding(.horizontal, 13)
+            .padding(.vertical, 7)
             .background(
                 Capsule()
-                    .fill(Color.black.opacity(0.75))
+                    .fill(popupBackground)
                     .shadow(
-                        color: .yellow.opacity(0.4),
-                        radius: 8, x: 0, y: 2
+                        color: Color.black.opacity(colorScheme == .dark ? 0 : 0.18),
+                        radius: 8,
+                        x: 0,
+                        y: 3
                     )
             )
             .offset(y: offset)
@@ -718,16 +733,19 @@ struct PointsPopupView: View {
                 if showing {
                     offset = 0
                     opacity = 0
-                    withAnimation(.easeOut(duration: 0.3)) {
+
+                    withAnimation(.easeOut(duration: 0.25)) {
                         opacity = 1
                     }
+
                     withAnimation(
                         .easeOut(duration: 1.2).delay(0.1)
                     ) {
                         offset = -80
                     }
+
                     withAnimation(
-                        .easeIn(duration: 0.4).delay(0.9)
+                        .easeIn(duration: 0.35).delay(0.9)
                     ) {
                         opacity = 0
                     }
@@ -932,17 +950,50 @@ struct BurstParticle: Identifiable {
 // ============================================================
 // CelebrationView — Full screen all-goals-done overlay
 // ============================================================
+// ============================================================
+// CelebrationView — Full screen all-goals-done overlay
+// ============================================================
 struct CelebrationView: View {
 
     let isShowing: Bool
 
+    @Environment(\.colorScheme) private var colorScheme
+
     @State private var scaleEffect: CGFloat = 0.5
     @State private var opacity: Double = 0
+
+    private var cardBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.09, green: 0.09, blue: 0.10)
+        : Color.white
+    }
+
+    private var primaryText: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var secondaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.70)
+        : Color.black.opacity(0.58)
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.10)
+        : Color.black.opacity(0.08)
+    }
+
+    private var bonusBackground: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.08)
+        : Color.black.opacity(0.045)
+    }
 
     var body: some View {
         if isShowing {
             ZStack {
-                Color.black.opacity(0.6)
+                Color.black.opacity(colorScheme == .dark ? 0.68 : 0.45)
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
 
@@ -950,61 +1001,58 @@ struct CelebrationView: View {
 
                 VStack(spacing: 20) {
                     Text("🏆")
-                        .font(.system(size: 80))
+                        .font(.system(size: 78))
                         .scaleEffect(scaleEffect)
 
                     VStack(spacing: 8) {
                         Text("All Goals Done!")
                             .font(.largeTitle)
                             .fontWeight(.bold)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(primaryText)
 
-                        Text("You're absolutely crushing it today!")
+                        Text("You’re building serious momentum today.")
                             .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.8))
+                            .fontWeight(.medium)
+                            .foregroundStyle(secondaryText)
                             .multilineTextAlignment(.center)
                     }
 
                     HStack(spacing: 8) {
                         Text("🌟")
-                        Text("+25 Bonus Points!")
+
+                        Text("+25 Bonus Points")
                             .fontWeight(.bold)
                     }
-                    .foregroundStyle(.yellow)
+                    .foregroundStyle(primaryText)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
                     .background(
                         Capsule()
-                            .fill(Color.yellow.opacity(0.2))
+                            .fill(bonusBackground)
                             .overlay(
                                 Capsule()
-                                    .stroke(
-                                        Color.yellow.opacity(0.5),
-                                        lineWidth: 1.5
-                                    )
+                                    .stroke(borderColor, lineWidth: 1)
                             )
                     )
 
-                    Text("Keep the momentum going! 💪")
+                    Text("Small wins count. Keep going.")
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.6))
+                        .fontWeight(.medium)
+                        .foregroundStyle(secondaryText)
                 }
                 .padding(32)
                 .background(
-                    RoundedRectangle(cornerRadius: 28)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.purple.opacity(0.9),
-                                    Color.indigo.opacity(0.9)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                        .fill(cardBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                                .stroke(borderColor, lineWidth: 1)
                         )
                         .shadow(
-                            color: .purple.opacity(0.5),
-                            radius: 30, x: 0, y: 10
+                            color: Color.black.opacity(colorScheme == .dark ? 0 : 0.20),
+                            radius: 28,
+                            x: 0,
+                            y: 12
                         )
                 )
                 .padding(.horizontal, 32)
@@ -1018,6 +1066,7 @@ struct CelebrationView: View {
                     scaleEffect = 1.0
                     opacity = 1.0
                 }
+
                 DispatchQueue.main.asyncAfter(
                     deadline: .now() + 2.5
                 ) {
@@ -1034,38 +1083,76 @@ struct CelebrationView: View {
 // ============================================================
 // LevelUpView — Shows when user reaches a new level
 // ============================================================
+// ============================================================
+// LevelUpView — Shows when user reaches a new level
+// ============================================================
 struct LevelUpView: View {
 
     let level: PointsLevel
     let isShowing: Bool
 
+    @Environment(\.colorScheme) private var colorScheme
+
     @State private var scale: CGFloat = 0.3
     @State private var opacity: Double = 0
+
+    private var cardBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.09, green: 0.09, blue: 0.10)
+        : Color.white
+    }
+
+    private var primaryText: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var secondaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.70)
+        : Color.black.opacity(0.58)
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.10)
+        : Color.black.opacity(0.08)
+    }
 
     var body: some View {
         if isShowing {
             VStack(spacing: 12) {
                 Text(level.emoji)
                     .font(.system(size: 60))
+
                 Text("Level Up!")
                     .font(.title2)
                     .fontWeight(.bold)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(primaryText)
+
                 Text(level.rawValue)
                     .font(.headline)
+                    .fontWeight(.semibold)
                     .foregroundStyle(level.color)
+
                 Text(level.message)
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.8))
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
                     .multilineTextAlignment(.center)
             }
             .padding(28)
             .background(
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(Color(.systemBackground).opacity(0.95))
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(cardBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 24, style: .continuous)
+                            .stroke(borderColor, lineWidth: 1)
+                    )
                     .shadow(
-                        color: level.color.opacity(0.4),
-                        radius: 20
+                        color: Color.black.opacity(colorScheme == .dark ? 0 : 0.16),
+                        radius: 20,
+                        x: 0,
+                        y: 10
                     )
             )
             .scaleEffect(scale)

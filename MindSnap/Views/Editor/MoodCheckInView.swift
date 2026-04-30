@@ -7,89 +7,104 @@
 
 // ============================================================
 // MoodCheckInView.swift
-// MindSnap — Beautiful mood check-in popup
+// MindSnap — Premium Monochrome Mood Check-In
 //
-// WHAT THIS FILE DOES:
-// Shows a beautiful animated mood selector sheet when user
-// opens a new entry. This gives the user a moment to pause
-// and consciously check in with their emotions before writing.
+// UI UPDATE:
+// 1. Matches the new professional black/white MindSnap theme
+// 2. Cleaner mood selector with premium cards and soft motion
+// 3. Better light/dark mode support
+// 4. Keeps mood colors only as meaningful emotional accents
 //
-// EXPERIENCE FLOW:
-// 1. User taps "New Entry"
-// 2. This sheet slides up with a beautiful animation
-// 3. User sees 5 mood options in a circular layout
-// 4. Tapping a mood:
-//    - Scales up with spring animation
-//    - Background gradient shifts to mood color
-//    - Haptic feedback fires
-//    - Mood name and description appear
-// 5. User taps "Start Writing" → sheet dismisses
-// 6. Selected mood is passed back to EntryEditorView
-//
-// MVVM ROLE: View layer
-//            Receives a callback closure that passes the
-//            selected mood back to EntryEditorView.
+// FUNCTIONALITY KEPT:
+// 1. User selects mood
+// 2. Haptic feedback still works
+// 3. Start Writing passes selected mood back
+// 4. Skip passes neutral mood back
+// 5. Sheet dismiss behavior unchanged
 // ============================================================
 
 import SwiftUI
 
 struct MoodCheckInView: View {
 
-    // --------------------------------------------------------
-    // onMoodSelected — Callback when user picks a mood
-    //
-    // When user taps "Start Writing", we call this closure
-    // with the selected mood. EntryEditorView uses this to
-    // pre-set the mood before AI analysis runs.
-    // --------------------------------------------------------
     let onMoodSelected: (MoodType) -> Void
 
-    // --------------------------------------------------------
-    // @Environment(\.dismiss)
-    // Dismisses the sheet when user taps "Start Writing"
-    // --------------------------------------------------------
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
 
-    // --------------------------------------------------------
-    // selectedMood — Currently highlighted mood
-    //
-    // Starts as .neutral and changes when user taps a mood.
-    // Drives ALL the animations on this screen.
-    // --------------------------------------------------------
     @State private var selectedMood: MoodType = .neutral
-
-    // --------------------------------------------------------
-    // animateIn — Controls entrance animations
-    //
-    // Set to true in .onAppear to trigger the staggered
-    // entrance animation of each mood bubble.
-    // --------------------------------------------------------
     @State private var animateIn = false
-
-    // --------------------------------------------------------
-    // pulsing — Controls the selected mood pulse animation
-    // --------------------------------------------------------
     @State private var pulsing = false
 
     // --------------------------------------------------------
-    // Mood descriptions — shown below the wheel
-    //
-    // Each mood has a short empathetic description that
-    // helps users identify with the emotion.
+    // MARK: - Theme
     // --------------------------------------------------------
+    private var appBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.03, green: 0.03, blue: 0.035)
+        : Color(red: 0.96, green: 0.96, blue: 0.97)
+    }
+
+    private var cardBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.09, green: 0.09, blue: 0.10)
+        : Color.white
+    }
+
+    private var innerBackground: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.06)
+        : Color.black.opacity(0.045)
+    }
+
+    private var primaryText: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var secondaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.62)
+        : Color.black.opacity(0.52)
+    }
+
+    private var tertiaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.38)
+        : Color.black.opacity(0.34)
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.08)
+        : Color.black.opacity(0.07)
+    }
+
+    private var primaryButtonBackground: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var primaryButtonText: Color {
+        colorScheme == .dark ? .black : .white
+    }
+
+    private var shadowColor: Color {
+        colorScheme == .dark
+        ? Color.clear
+        : Color.black.opacity(0.08)
+    }
+
     private var moodDescription: String {
         switch selectedMood {
         case .happy:
-            return "Something good happened! ✨\nCapture this feeling."
+            return "Something good happened. Capture this feeling and give yourself credit for the moment."
         case .calm:
-            return "You're in a peaceful state 🌿\nPerfect time to reflect."
+            return "You feel steady and peaceful. This is a good time to reflect with clarity."
         case .neutral:
-            return "Just checking in 📝\nHow was your day?"
+            return "A simple check-in is enough. Write what happened and how your day is going."
         case .anxious:
-            return "Feeling some tension 💭\nWriting can help you process it."
+            return "There may be some tension right now. Writing can help you slow it down."
         case .sad:
-            return "Having a tough moment 💙\nYour feelings are valid."
+            return "This may be a heavy moment. Your feelings are valid, and you can write safely here."
         }
     }
 
@@ -98,50 +113,41 @@ struct MoodCheckInView: View {
     // --------------------------------------------------------
     var body: some View {
         ZStack {
-
-            // ---- Animated background ----
-            // Smoothly shifts color based on selected mood
             animatedBackground
 
             VStack(spacing: 0) {
 
-                // ---- Top handle bar ----
-                // Visual indicator that this is a sheet
-                RoundedRectangle(cornerRadius: 3)
-                    .fill(Color.secondary.opacity(0.3))
-                    .frame(width: 40, height: 5)
-                    .padding(.top, 12)
-                    .padding(.bottom, 24)
+                sheetHandle
 
-                // ---- Header ----
                 headerSection
+                    .padding(.top, 8)
 
-                Spacer()
+                Spacer(minLength: 24)
 
-                // ---- Mood Wheel ----
-                moodWheelSection
+                selectedMoodHero
 
-                Spacer()
+                Spacer(minLength: 24)
 
-                // ---- Mood Description ----
+                moodGridSection
+
+                Spacer(minLength: 20)
+
                 moodDescriptionSection
 
-                Spacer()
+                Spacer(minLength: 24)
 
-                // ---- Start Writing Button ----
                 startWritingButton
-                    .padding(.bottom, 40)
+                    .padding(.bottom, 34)
             }
+            .padding(.horizontal, 22)
         }
-        // Make sheet taller for better visual impact
         .presentationDetents([.large])
         .presentationDragIndicator(.hidden)
         .onAppear {
-            // Trigger entrance animations after brief delay
-            withAnimation(.spring(duration: 0.6, bounce: 0.3).delay(0.1)) {
+            withAnimation(.spring(duration: 0.6, bounce: 0.28).delay(0.08)) {
                 animateIn = true
             }
-            // Start pulse animation
+
             withAnimation(
                 .easeInOut(duration: 1.2)
                 .repeatForever(autoreverses: true)
@@ -152,378 +158,320 @@ struct MoodCheckInView: View {
     }
 
     // --------------------------------------------------------
-    // MARK: - Subviews
-    // --------------------------------------------------------
-
-    // --------------------------------------------------------
-    // animatedBackground
-    //
-    // Full screen gradient that smoothly transitions between
-    // mood colors as the user taps different moods.
-    // This is what makes the UI feel truly premium.
+    // MARK: - Background
     // --------------------------------------------------------
     private var animatedBackground: some View {
         ZStack {
-            // Base system background
-            Color(.systemBackground)
+            appBackground
                 .ignoresSafeArea()
 
-            // Mood color overlay — shifts smoothly
             RadialGradient(
                 colors: [
-                    selectedMood.color.opacity(
-                        colorScheme == .dark ? 0.4 : 0.2
-                    ),
-                    selectedMood.color.opacity(
-                        colorScheme == .dark ? 0.15 : 0.05
-                    ),
+                    selectedMood.color.opacity(colorScheme == .dark ? 0.18 : 0.10),
+                    selectedMood.color.opacity(colorScheme == .dark ? 0.07 : 0.04),
                     Color.clear
                 ],
-                center: .center,
-                startRadius: 50,
-                endRadius: 350
+                center: .top,
+                startRadius: 30,
+                endRadius: 420
             )
             .ignoresSafeArea()
-            // Animate the gradient change smoothly
-            .animation(.easeInOut(duration: 0.4), value: selectedMood)
+            .animation(.easeInOut(duration: 0.35), value: selectedMood)
         }
     }
 
+    private var sheetHandle: some View {
+        RoundedRectangle(cornerRadius: 3)
+            .fill(tertiaryText.opacity(0.55))
+            .frame(width: 44, height: 5)
+            .padding(.top, 12)
+            .padding(.bottom, 18)
+    }
+
     // --------------------------------------------------------
-    // headerSection
-    //
-    // Title and subtitle with staggered entrance animation
+    // MARK: - Header
     // --------------------------------------------------------
     private var headerSection: some View {
         VStack(spacing: 8) {
-            Text("How are you feeling")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundStyle(.primary)
+            Text("How are you feeling?")
+                .font(.system(size: 30, weight: .bold, design: .rounded))
+                .foregroundStyle(primaryText)
+                .multilineTextAlignment(.center)
 
-            Text("right now?")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundStyle(selectedMood.color)
-                // Animate color change when mood changes
-                .animation(.easeInOut(duration: 0.3), value: selectedMood)
-
-            Text("Tap to select your mood")
+            Text("Choose a mood before you start writing.")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .padding(.top, 4)
+                .fontWeight(.medium)
+                .foregroundStyle(secondaryText)
+                .multilineTextAlignment(.center)
         }
-        // Entrance animation
         .opacity(animateIn ? 1 : 0)
-        .offset(y: animateIn ? 0 : -20)
+        .offset(y: animateIn ? 0 : -18)
         .animation(.spring(duration: 0.5).delay(0.1), value: animateIn)
     }
 
     // --------------------------------------------------------
-    // moodWheelSection
-    //
-    // The star of the show — circular mood selector.
-    //
-    // Layout:
-    //         😊          ← top center
-    //      😌     😰       ← middle row
-    //      😢     😐       ← bottom row
-    //
-    // Each bubble:
-    //   - Large emoji in colored circle
-    //   - Selected = scale up + glow ring + bounce
-    //   - Unselected = smaller, muted
-    //   - Entrance = staggered scale animation
+    // MARK: - Selected Mood Hero
     // --------------------------------------------------------
-    private var moodWheelSection: some View {
-        VStack(spacing: 20) {
+    private var selectedMoodHero: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .stroke(
+                        selectedMood.color.opacity(colorScheme == .dark ? 0.32 : 0.22),
+                        lineWidth: 10
+                    )
+                    .frame(width: 130, height: 130)
+                    .scaleEffect(pulsing ? 1.05 : 0.98)
+                    .animation(
+                        .easeInOut(duration: 1.2)
+                        .repeatForever(autoreverses: true),
+                        value: pulsing
+                    )
 
-            // ---- Top: Happy (center) ----
-            HStack {
-                Spacer()
-                moodBubble(mood: .happy, delay: 0.0)
-                Spacer()
+                Circle()
+                    .fill(cardBackground)
+                    .frame(width: 112, height: 112)
+                    .overlay(
+                        Circle()
+                            .stroke(borderColor, lineWidth: 1)
+                    )
+                    .shadow(
+                        color: selectedMood.color.opacity(colorScheme == .dark ? 0.10 : 0.18),
+                        radius: 18,
+                        x: 0,
+                        y: 10
+                    )
+
+                Text(selectedMood.emoji)
+                    .font(.system(size: 54))
+                    .scaleEffect(pulsing ? 1.04 : 1.0)
+                    .animation(
+                        .easeInOut(duration: 1.2)
+                        .repeatForever(autoreverses: true),
+                        value: pulsing
+                    )
             }
 
-            // ---- Middle row: Calm + Anxious ----
-            HStack(spacing: 48) {
-                moodBubble(mood: .calm, delay: 0.1)
-                // Center connecting lines (decorative)
-                centerDecoration
-                moodBubble(mood: .anxious, delay: 0.1)
-            }
+            HStack(spacing: 8) {
+                Text("Feeling")
+                    .font(.headline)
+                    .foregroundStyle(secondaryText)
 
-            // ---- Bottom row: Sad + Neutral ----
-            HStack(spacing: 48) {
-                moodBubble(mood: .sad, delay: 0.2)
-                // Empty space to match middle row
-                Color.clear
-                    .frame(width: 60, height: 60)
-                moodBubble(mood: .neutral, delay: 0.2)
+                Text(selectedMood.displayName)
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(selectedMood.color)
             }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
+            .background(
+                Capsule()
+                    .fill(cardBackground)
+                    .overlay(
+                        Capsule()
+                            .stroke(borderColor, lineWidth: 1)
+                    )
+            )
         }
-        .padding(.horizontal, 40)
+        .opacity(animateIn ? 1 : 0)
+        .scaleEffect(animateIn ? 1 : 0.92)
+        .animation(.spring(duration: 0.55, bounce: 0.28).delay(0.18), value: animateIn)
+        .animation(.easeInOut(duration: 0.25), value: selectedMood)
     }
 
     // --------------------------------------------------------
-    // moodBubble(mood:delay:)
-    //
-    // A single tappable mood bubble in the wheel.
-    //
-    // Visual states:
-    //   Selected:   large (110pt), colored bg, glow ring,
-    //               emoji scale 1.2, spring bounce on tap
-    //   Unselected: normal (80pt), muted bg, no ring
-    //
-    // Parameters:
-    //   mood  — which MoodType this bubble represents
-    //   delay — entrance animation delay (staggered effect)
+    // MARK: - Mood Grid
     // --------------------------------------------------------
-    private func moodBubble(mood: MoodType, delay: Double) -> some View {
+    private var moodGridSection: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 12) {
+                moodOption(.happy, delay: 0.05)
+                moodOption(.calm, delay: 0.10)
+                moodOption(.neutral, delay: 0.15)
+            }
+
+            HStack(spacing: 12) {
+                moodOption(.anxious, delay: 0.20)
+                moodOption(.sad, delay: 0.25)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 28)
+                .fill(cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 28)
+                        .stroke(borderColor, lineWidth: 1)
+                )
+                .shadow(
+                    color: shadowColor,
+                    radius: 16,
+                    x: 0,
+                    y: 8
+                )
+        )
+        .opacity(animateIn ? 1 : 0)
+        .offset(y: animateIn ? 0 : 18)
+        .animation(.spring(duration: 0.55).delay(0.25), value: animateIn)
+    }
+
+    private func moodOption(_ mood: MoodType, delay: Double) -> some View {
         let isSelected = selectedMood == mood
-        let size: CGFloat = isSelected ? 110 : 80
 
         return Button {
             selectMood(mood)
         } label: {
-            ZStack {
-                // ---- Outer glow ring (selected only) ----
-                if isSelected {
+            VStack(spacing: 8) {
+                ZStack {
                     Circle()
-                        .stroke(mood.color.opacity(0.3), lineWidth: 3)
-                        .frame(width: size + 20, height: size + 20)
-                        .scaleEffect(pulsing ? 1.08 : 1.0)
-                        .animation(
-                            .easeInOut(duration: 1.2)
-                            .repeatForever(autoreverses: true),
-                            value: pulsing
+                        .fill(
+                            isSelected
+                            ? mood.color.opacity(colorScheme == .dark ? 0.24 : 0.14)
+                            : innerBackground
                         )
+                        .frame(width: 62, height: 62)
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    isSelected ? mood.color.opacity(0.70) : borderColor,
+                                    lineWidth: isSelected ? 2 : 1
+                                )
+                        )
+
+                    Text(mood.emoji)
+                        .font(.system(size: isSelected ? 30 : 26))
                 }
 
-                // ---- Background circle ----
-                Circle()
-                    .fill(
-                        isSelected
-                            ? mood.color.opacity(
-                                colorScheme == .dark ? 0.35 : 0.2
-                              )
-                            : Color(.systemGray5).opacity(0.8)
-                    )
-                    .frame(width: size, height: size)
-                    // Colored border when selected
-                    .overlay(
-                        Circle()
-                            .stroke(
-                                isSelected
-                                    ? mood.color.opacity(0.6)
-                                    : Color.clear,
-                                lineWidth: 2.5
-                            )
-                    )
-                    // Shadow glow when selected
-                    .shadow(
-                        color: isSelected
-                            ? mood.color.opacity(0.4)
-                            : Color.clear,
-                        radius: isSelected ? 16 : 0
-                    )
-
-                // ---- Emoji ----
-                Text(mood.emoji)
-                    .font(.system(size: isSelected ? 46 : 34))
-                    // Slight scale up on the emoji itself
-                    .scaleEffect(isSelected ? 1.1 : 1.0)
+                Text(mood.displayName)
+                    .font(.caption)
+                    .fontWeight(isSelected ? .bold : .semibold)
+                    .foregroundStyle(isSelected ? mood.color : secondaryText)
+                    .lineLimit(1)
             }
+            .frame(width: 92, height: 96)
+            .background(
+                RoundedRectangle(cornerRadius: 22)
+                    .fill(isSelected ? selectedCardTint(for: mood) : Color.clear)
+            )
+            .scaleEffect(isSelected ? 1.03 : 1.0)
         }
-        // Spring animation for size/scale changes
+        .buttonStyle(.plain)
+        .scaleEffect(animateIn ? 1 : 0.80)
+        .opacity(animateIn ? 1 : 0)
         .animation(
-            .spring(duration: 0.4, bounce: 0.5),
-            value: isSelected
-        )
-        // Entrance animation — scale from 0
-        .scaleEffect(animateIn ? 1.0 : 0.0)
-        .animation(
-            .spring(duration: 0.5, bounce: 0.4).delay(delay + 0.2),
+            .spring(duration: 0.45, bounce: 0.32).delay(delay),
             value: animateIn
         )
+        .animation(
+            .spring(duration: 0.28, bounce: 0.35),
+            value: isSelected
+        )
+    }
+
+    private func selectedCardTint(for mood: MoodType) -> Color {
+        mood.color.opacity(colorScheme == .dark ? 0.10 : 0.065)
     }
 
     // --------------------------------------------------------
-    // centerDecoration
-    //
-    // Decorative element in the center of the wheel.
-    // Shows a small pulsing circle that matches the mood color.
-    // --------------------------------------------------------
-    private var centerDecoration: some View {
-        ZStack {
-            // Outer pulse ring
-            Circle()
-                .stroke(
-                    selectedMood.color.opacity(0.3),
-                    lineWidth: 1.5
-                )
-                .frame(width: 50, height: 50)
-                .scaleEffect(pulsing ? 1.15 : 1.0)
-                .animation(
-                    .easeInOut(duration: 1.5)
-                    .repeatForever(autoreverses: true),
-                    value: pulsing
-                )
-
-            // Inner filled circle
-            Circle()
-                .fill(selectedMood.color.opacity(
-                    colorScheme == .dark ? 0.3 : 0.15
-                ))
-                .frame(width: 36, height: 36)
-
-            // Mood initial letter or small emoji
-            Text(selectedMood.emoji)
-                .font(.system(size: 16))
-        }
-        .animation(.easeInOut(duration: 0.3), value: selectedMood)
-    }
-
-    // --------------------------------------------------------
-    // moodDescriptionSection
-    //
-    // Shows the mood name and empathetic description.
-    // Animates smoothly when mood changes.
+    // MARK: - Mood Description
     // --------------------------------------------------------
     private var moodDescriptionSection: some View {
-        VStack(spacing: 8) {
-            // Mood name badge
-            HStack(spacing: 8) {
-                Text(selectedMood.emoji)
-                    .font(.title3)
-                Text("Feeling \(selectedMood.displayName)")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(selectedMood.color)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(
-                Capsule()
-                    .fill(selectedMood.color.opacity(
-                        colorScheme == .dark ? 0.2 : 0.1
-                    ))
-            )
-            .animation(.easeInOut(duration: 0.3), value: selectedMood)
-
-            // Empathetic description
+        VStack(spacing: 10) {
             Text(moodDescription)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .fontWeight(.medium)
+                .foregroundStyle(secondaryText)
                 .multilineTextAlignment(.center)
-                .lineSpacing(4)
-                .padding(.horizontal, 40)
-                .fixedSize(horizontal: false, vertical: true)
-                // Fade in/out when mood changes
-                .id(selectedMood) // Forces re-render on mood change
-                .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                .animation(.easeInOut(duration: 0.25), value: selectedMood)
+                .lineSpacing(3)
+                .padding(.horizontal, 18)
+                .id(selectedMood)
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                .animation(.easeInOut(duration: 0.22), value: selectedMood)
         }
-        // Entrance animation
+        .padding(.horizontal, 4)
         .opacity(animateIn ? 1 : 0)
-        .animation(.spring(duration: 0.5).delay(0.4), value: animateIn)
+        .animation(.spring(duration: 0.5).delay(0.38), value: animateIn)
     }
 
     // --------------------------------------------------------
-    // startWritingButton
-    //
-    // The CTA button that dismisses the sheet and starts
-    // the journal entry with the selected mood.
+    // MARK: - Start Writing Button
     // --------------------------------------------------------
     private var startWritingButton: some View {
         VStack(spacing: 12) {
             Button {
-                // Pass selected mood back to EntryEditorView
                 onMoodSelected(selectedMood)
-                // Dismiss the sheet
                 dismiss()
             } label: {
                 HStack(spacing: 10) {
                     Text("Start Writing")
+                        .font(.headline)
                         .fontWeight(.bold)
+
                     Image(systemName: "arrow.right")
+                        .font(.headline)
                         .fontWeight(.semibold)
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(primaryButtonText)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 18)
+                .padding(.vertical, 17)
                 .background(
                     Capsule()
-                        .fill(selectedMood.color)
-                        // Gradient for premium look
+                        .fill(primaryButtonBackground)
                         .overlay(
                             Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white.opacity(0.15),
-                                            Color.clear
-                                        ],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
+                                .stroke(
+                                    colorScheme == .dark
+                                    ? Color.white.opacity(0.18)
+                                    : Color.clear,
+                                    lineWidth: 1
                                 )
                         )
                 )
                 .shadow(
-                    color: selectedMood.color.opacity(0.5),
-                    radius: 12, x: 0, y: 6
+                    color: colorScheme == .dark
+                    ? Color.clear
+                    : Color.black.opacity(0.14),
+                    radius: 14,
+                    x: 0,
+                    y: 8
                 )
-                // Animate button color when mood changes
-                .animation(.easeInOut(duration: 0.3), value: selectedMood)
             }
-            .padding(.horizontal, 32)
+            .buttonStyle(.plain)
 
-            // Skip option — goes straight to writing
-            // with neutral mood
-            Button("Skip mood check-in") {
+            Button {
                 onMoodSelected(.neutral)
                 dismiss()
+            } label: {
+                Text("Skip mood check-in")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
+                    .padding(.vertical, 6)
             }
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
+            .buttonStyle(.plain)
         }
-        // Entrance animation
         .opacity(animateIn ? 1 : 0)
-        .offset(y: animateIn ? 0 : 30)
-        .animation(.spring(duration: 0.5).delay(0.5), value: animateIn)
+        .offset(y: animateIn ? 0 : 24)
+        .animation(.spring(duration: 0.5).delay(0.45), value: animateIn)
     }
 
     // --------------------------------------------------------
     // MARK: - Actions
     // --------------------------------------------------------
-
-    // --------------------------------------------------------
-    // selectMood(_:)
-    //
-    // Called when user taps a mood bubble.
-    // Updates selectedMood and fires haptic feedback.
-    // --------------------------------------------------------
     private func selectMood(_ mood: MoodType) {
-        // Only fire haptic if selecting a DIFFERENT mood
         guard mood != selectedMood else { return }
 
-        // Update selected mood → triggers all animations
-        withAnimation(.spring(duration: 0.4, bounce: 0.5)) {
+        withAnimation(.spring(duration: 0.35, bounce: 0.42)) {
             selectedMood = mood
         }
 
-        // ---- Haptic Feedback ----
-        // UIImpactFeedbackGenerator creates a physical "tap"
-        // feeling on the device. .medium is noticeable but
-        // not too strong.
         let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
         impactFeedback.impactOccurred()
     }
 }
 
 // ============================================================
-// Preview — Both modes
+// Preview
 // ============================================================
 #Preview("Light Mode") {
     MoodCheckInView { mood in

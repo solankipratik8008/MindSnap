@@ -7,14 +7,22 @@
 
 // ============================================================
 // WeeklyProgressView.swift
-// MindSnap — STREAK FIXED + OVERALL STREAK DISPLAY
+// MindSnap — Premium Monochrome Weekly Progress Card
 //
-// WHAT CHANGED:
-// 1. Fixed streak badge — now shows correctly always
-// 2. Added overall streak from GoalViewModel
-// 3. Fixed dark mode card colors
-// 4. Added partial points info
-// 5. Better weekly completion display
+// UI UPDATE:
+// 1. Matches the new black/white professional MindSnap theme
+// 2. Removes purple/pink heavy branding
+// 3. Keeps achievement colors as small meaningful accents
+// 4. Improves light/dark mode card contr ast
+// 5. Keeps same progress/streak/points display
+//
+// FUNCTIONALITY KEPT:
+// 1. Animated total points
+// 2. Animated overall streak
+// 3. Weekly completion rate
+// 4. Weekly goal dots
+// 5. Partial points info
+// 6. All goals completed banner
 // ============================================================
 
 import SwiftUI
@@ -23,6 +31,7 @@ import SwiftData
 struct WeeklyProgressView: View {
 
     let viewModel: GoalViewModel
+
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var animatedPoints: Int = 0
@@ -31,36 +40,90 @@ struct WeeklyProgressView: View {
     private let weekDayLabels = [
         "Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"
     ]
-    
-    private var brandPrimary: Color {
-        Color(red: 0.50, green: 0.12, blue: 0.85)
+
+    // --------------------------------------------------------
+    // MARK: - Theme
+    // --------------------------------------------------------
+    private var cardBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.09, green: 0.09, blue: 0.10)
+        : Color.white
     }
 
-    private var brandSecondary: Color {
-        Color(red: 0.88, green: 0.12, blue: 0.68)
+    private var softBackground: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.07)
+        : Color.black.opacity(0.045)
     }
 
-    private var brandAccent: Color {
-        Color(red: 0.10, green: 0.78, blue: 0.85)
+    private var primaryText: Color {
+        colorScheme == .dark ? .white : .black
     }
 
+    private var secondaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.62)
+        : Color.black.opacity(0.52)
+    }
+
+    private var tertiaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.38)
+        : Color.black.opacity(0.34)
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.08)
+        : Color.black.opacity(0.07)
+    }
+
+    private var shadowColor: Color {
+        colorScheme == .dark
+        ? Color.clear
+        : Color.black.opacity(0.06)
+    }
+
+    private var progressTrackColor: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.10)
+        : Color.black.opacity(0.065)
+    }
+
+    private var progressFillColor: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var appBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.03, green: 0.03, blue: 0.035)
+        : Color(red: 0.96, green: 0.96, blue: 0.97)
+    }
+
+    // --------------------------------------------------------
+    // MARK: - Body
+    // --------------------------------------------------------
     var body: some View {
         VStack(spacing: 0) {
             topBanner
+
             weeklyOverview
         }
         .background(
-            RoundedRectangle(cornerRadius: 22)
+            RoundedRectangle(cornerRadius: 24)
                 .fill(cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(borderColor, lineWidth: 1)
+                )
                 .shadow(
-                    color: colorScheme == .dark
-                        ? Color.black.opacity(0.35)
-                        : brandPrimary.opacity(0.10),
+                    color: shadowColor,
                     radius: 14,
                     x: 0,
-                    y: 6
+                    y: 7
                 )
         )
+        .clipShape(RoundedRectangle(cornerRadius: 24))
         .onAppear {
             withAnimation(.easeOut(duration: 1.0)) {
                 animatedPoints = viewModel.totalPoints
@@ -80,215 +143,175 @@ struct WeeklyProgressView: View {
     }
 
     // --------------------------------------------------------
-    // MARK: - Card Background
-    // --------------------------------------------------------
-    private var cardBackground: Color {
-        colorScheme == .dark
-            ? Color(red: 0.13, green: 0.12, blue: 0.16)
-            : Color.white
-    }
-    // --------------------------------------------------------
     // MARK: - Top Banner
     // --------------------------------------------------------
     private var topBanner: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    brandPrimary.opacity(colorScheme == .dark ? 0.95 : 0.92),
-                    brandSecondary.opacity(colorScheme == .dark ? 0.84 : 0.78),
-                    brandAccent.opacity(colorScheme == .dark ? 0.24 : 0.12)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+        VStack(spacing: 14) {
 
-            // Minimal premium shine instead of large bubbles
-            LinearGradient(
-                colors: [
-                    Color.white.opacity(colorScheme == .dark ? 0.08 : 0.10),
-                    Color.white.opacity(0.02),
-                    Color.clear
-                ],
-                startPoint: .topTrailing,
-                endPoint: .bottomLeading
-            )
+            HStack(alignment: .center, spacing: 12) {
 
-            RoundedRectangle(cornerRadius: 22)
-                .stroke(
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(colorScheme == .dark ? 0.20 : 0.30),
-                            Color.white.opacity(0.04)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-                .padding(0.5)
+                HStack(spacing: 10) {
+                    ZStack {
+                        Circle()
+                            .fill(softBackground)
+                            .frame(width: 48, height: 48)
+                            .overlay(
+                                Circle()
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
 
-            VStack(spacing: 10) {
-
-                HStack(alignment: .center, spacing: 12) {
-
-                    HStack(spacing: 9) {
                         Text(viewModel.currentLevel.emoji)
-                            .font(.title2)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(viewModel.currentLevel.rawValue)
-                                .font(.subheadline)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.white)
-
-                            Text("Current Level")
-                                .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.92))
-                        }
+                            .font(.system(size: 26))
                     }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(viewModel.currentLevel.rawValue)
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(primaryText)
+
+                        Text("Current Level")
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                            .foregroundStyle(secondaryText)
+                    }
+                }
+
+                Spacer()
+
+                VStack(alignment: .center, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text("🔥")
+                            .font(.subheadline)
+
+                        Text("\(animatedStreak)")
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundStyle(primaryText)
+                            .monospacedDigit()
+                            .contentTransition(.numericText())
+                    }
+
+                    Text("day streak")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundStyle(secondaryText)
+                }
+                .padding(.horizontal, 11)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(softBackground)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(borderColor, lineWidth: 1)
+                        )
+                )
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    HStack(spacing: 4) {
+                        Text("\(animatedPoints)")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundStyle(primaryText)
+                            .contentTransition(.numericText())
+                            .monospacedDigit()
+
+                        Text("⭐")
+                            .font(.title3)
+                    }
+
+                    Text("Points")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundStyle(secondaryText)
+                }
+            }
+
+            VStack(spacing: 7) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(progressTrackColor)
+                            .frame(height: 8)
+
+                        Capsule()
+                            .fill(progressFillColor)
+                            .frame(
+                                width: max(
+                                    8,
+                                    geo.size.width *
+                                    CGFloat(UserPoints.progressToNextLevel)
+                                ),
+                                height: 8
+                            )
+                            .animation(
+                                .spring(duration: 0.8),
+                                value: viewModel.totalPoints
+                            )
+                    }
+                }
+                .frame(height: 8)
+
+                HStack {
+                    Text(viewModel.currentLevel.message)
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundStyle(secondaryText)
+                        .lineLimit(1)
 
                     Spacer()
 
-                    VStack(alignment: .center, spacing: 1) {
-                        HStack(spacing: 3) {
-                            Text("🔥")
-                                .font(.subheadline)
-
-                            Text("\(animatedStreak)")
-                                .font(.title3)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.white)
-                                .monospacedDigit()
-                                .contentTransition(.numericText())
-                        }
-
-                        Text("day streak")
+                    if viewModel.currentLevel != .champion {
+                        Text("\(UserPoints.pointsToNextLevel) pts to next")
                             .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.90))
-                    }
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 7)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.white.opacity(colorScheme == .dark ? 0.13 : 0.16))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                            )
-                    )
-
-                    VStack(alignment: .trailing, spacing: 1) {
-                        HStack(spacing: 4) {
-                            Text("\(animatedPoints)")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                                .foregroundStyle(.white)
-                                .contentTransition(.numericText())
-                                .monospacedDigit()
-
-                            Text("⭐")
-                                .font(.title3)
-                        }
-
-                        Text("Total Points")
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.90))
-                    }
-                }
-
-                VStack(spacing: 5) {
-                    GeometryReader { geo in
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.white.opacity(0.22))
-                                .frame(height: 8)
-
-                            Capsule()
-                                .fill(
-                                    LinearGradient(
-                                        colors: [
-                                            Color.white,
-                                            Color.white.opacity(0.86)
-                                        ],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )
-                                )
-                                .frame(
-                                    width: max(
-                                        8,
-                                        geo.size.width *
-                                        CGFloat(UserPoints.progressToNextLevel)
-                                    ),
-                                    height: 8
-                                )
-                                .shadow(
-                                    color: .white.opacity(0.18),
-                                    radius: 4,
-                                    x: 0,
-                                    y: 1
-                                )
-                                .animation(
-                                    .spring(duration: 0.8),
-                                    value: viewModel.totalPoints
-                                )
-                        }
-                    }
-                    .frame(height: 8)
-
-                    HStack {
-                        Text(viewModel.currentLevel.message)
-                            .font(.caption2)
-                            .foregroundStyle(.white.opacity(0.94))
+                            .fontWeight(.semibold)
+                            .foregroundStyle(primaryText)
                             .lineLimit(1)
-
-                        Spacer()
-
-                        if viewModel.currentLevel != .champion {
-                            Text("\(UserPoints.pointsToNextLevel) pts to next level")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.white)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.85)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.black.opacity(colorScheme == .dark ? 0.18 : 0.16))
-                                )
-                                .shadow(color: .black.opacity(0.18), radius: 1, x: 0, y: 1)
-                        } else {
-                            Text("Max Level! 🏆")
-                                .font(.caption2)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.black.opacity(colorScheme == .dark ? 0.18 : 0.16))
-                                )
-                        }
+                            .minimumScaleFactor(0.85)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule()
+                                    .fill(softBackground)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(borderColor, lineWidth: 1)
+                                    )
+                            )
+                    } else {
+                        Text("Max Level 🏆")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(primaryText)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule()
+                                    .fill(softBackground)
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(borderColor, lineWidth: 1)
+                                    )
+                            )
                     }
                 }
             }
-            .padding(16)
-            .shadow(
-                color: Color.black.opacity(colorScheme == .dark ? 0.24 : 0.16),
-                radius: 1,
-                x: 0,
-                y: 1
-            )
         }
-        .frame(height: 140)
-        .clipShape(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 22,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 22
-            )
+        .padding(16)
+        .background(
+            ZStack {
+                cardBackground
+
+                LinearGradient(
+                    colors: [
+                        progressFillColor.opacity(colorScheme == .dark ? 0.10 : 0.045),
+                        Color.clear
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
         )
     }
 
@@ -298,87 +321,39 @@ struct WeeklyProgressView: View {
     private var weeklyOverview: some View {
         VStack(spacing: 14) {
 
-            // Today completion row
             HStack {
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("This Week")
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(primaryText)
 
                     Text(
                         "\(viewModel.completedTodayCount) of " +
                         "\(viewModel.todaysGoals.count) goals today"
                     )
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
                 }
 
                 Spacer()
 
-                // Completion ring
-                ZStack {
-                    Circle()
-                        .stroke(
-                            colorScheme == .dark
-                                ? Color.white.opacity(0.1)
-                                : Color(.systemGray5),
-                            lineWidth: 5
-                        )
-                        .frame(width: 50, height: 50)
-
-                    Circle()
-                        .trim(
-                            from: 0,
-                            to: CGFloat(
-                                viewModel.weeklyCompletionRate
-                            )
-                        )
-                        .stroke(
-                            LinearGradient(
-                                colors: [brandPrimary, brandSecondary],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            style: StrokeStyle(
-                                lineWidth: 5,
-                                lineCap: .round
-                            )
-                        )
-                        .frame(width: 50, height: 50)
-                        .rotationEffect(.degrees(-90))
-                        .animation(
-                            .spring(duration: 0.8),
-                            value: viewModel.weeklyCompletionRate
-                        )
-
-                    Text(
-                        "\(Int(viewModel.weeklyCompletionRate * 100))%"
-                    )
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(brandSecondary)
-                }
+                completionRing
             }
 
             Divider()
-                .background(
-                    colorScheme == .dark
-                        ? Color.white.opacity(0.08)
-                        : Color(.systemGray5)
-                )
+                .background(borderColor)
 
-            // Day dots grid
             dayDotsGrid
 
-            // Partial points info
             if hasPartialProgress {
                 partialPointsInfo
-                    .transition(.opacity.combined(
-                        with: .move(edge: .bottom)
-                    ))
+                    .transition(
+                        .opacity.combined(with: .move(edge: .bottom))
+                    )
             }
 
-            // All done banner
             if viewModel.allGoalsCompletedToday &&
                !viewModel.todaysGoals.isEmpty {
                 allDoneBanner
@@ -386,10 +361,48 @@ struct WeeklyProgressView: View {
             }
         }
         .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(cardBackground)
+        )
         .animation(
             .spring(duration: 0.3),
             value: viewModel.allGoalsCompletedToday
         )
+    }
+
+    // --------------------------------------------------------
+    // MARK: - Completion Ring
+    // --------------------------------------------------------
+    private var completionRing: some View {
+        ZStack {
+            Circle()
+                .stroke(progressTrackColor, lineWidth: 5)
+                .frame(width: 52, height: 52)
+
+            Circle()
+                .trim(
+                    from: 0,
+                    to: CGFloat(viewModel.weeklyCompletionRate)
+                )
+                .stroke(
+                    progressFillColor,
+                    style: StrokeStyle(
+                        lineWidth: 5,
+                        lineCap: .round
+                    )
+                )
+                .frame(width: 52, height: 52)
+                .rotationEffect(.degrees(-90))
+                .animation(
+                    .spring(duration: 0.8),
+                    value: viewModel.weeklyCompletionRate
+                )
+
+            Text("\(Int(viewModel.weeklyCompletionRate * 100))%")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(primaryText)
+        }
     }
 
     // --------------------------------------------------------
@@ -398,7 +411,6 @@ struct WeeklyProgressView: View {
     private var dayDotsGrid: some View {
         VStack(spacing: 10) {
 
-            // Day labels
             HStack(spacing: 0) {
                 ForEach(
                     Array(weekDayLabels.enumerated()),
@@ -408,12 +420,13 @@ struct WeeklyProgressView: View {
                         .font(.caption2)
                         .fontWeight(
                             isToday(index: index)
-                                ? .bold : .regular
+                            ? .bold
+                            : .regular
                         )
                         .foregroundStyle(
                             isToday(index: index)
-                                 ? brandSecondary
-                                : Color.secondary
+                            ? primaryText
+                            : secondaryText
                         )
                         .frame(maxWidth: .infinity)
                 }
@@ -422,7 +435,8 @@ struct WeeklyProgressView: View {
             if viewModel.todaysGoals.isEmpty {
                 Text("Add goals to see your weekly progress")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 8)
             } else {
@@ -438,7 +452,8 @@ struct WeeklyProgressView: View {
                         " more goals"
                     )
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
                     .frame(
                         maxWidth: .infinity,
                         alignment: .center
@@ -464,16 +479,10 @@ struct WeeklyProgressView: View {
                     Circle()
                         .fill(
                             isFuture
-                                ? Color(.systemGray5).opacity(
-                                    colorScheme == .dark
-                                        ? 0.3 : 0.5
-                                  )
-                                : completed
-                                    ? goal.color
-                                    : colorScheme == .dark
-                                        ? Color.white.opacity(0.12)
-                                        : Color(.systemGray4)
-                                            .opacity(0.4)
+                            ? softBackground
+                            : completed
+                                ? goal.color.opacity(colorScheme == .dark ? 0.90 : 0.78)
+                                : progressTrackColor
                         )
                         .frame(width: 10, height: 10)
                         .animation(
@@ -483,7 +492,10 @@ struct WeeklyProgressView: View {
 
                     if isTodayIndex {
                         Circle()
-                            .stroke(goal.color, lineWidth: 1.5)
+                            .stroke(
+                                goal.color.opacity(0.82),
+                                lineWidth: 1.5
+                            )
                             .frame(width: 16, height: 16)
                     }
                 }
@@ -508,33 +520,32 @@ struct WeeklyProgressView: View {
         VStack(spacing: 6) {
             ForEach(viewModel.todaysGoals) { goal in
                 let progress = viewModel.todaysProgress(for: goal)
+
                 if progress > 0 &&
                    !viewModel.isCompletedToday(goal) &&
                    goal.goalType == .progress {
-                    let partial = goal.partialPoints(
-                        for: progress
-                    )
+                    let partial = goal.partialPoints(for: progress)
+
                     if partial > 0 {
                         HStack(spacing: 6) {
                             Text(goal.emoji)
                                 .font(.caption)
+
                             Text(
                                 "\(progress.formatted(.number.precision(.fractionLength(0...1))))/\(goal.targetValue) \(goal.unit)"
                             )
                             .font(.caption2)
                             .fontWeight(.medium)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(secondaryText)
                             .lineLimit(1)
                             .minimumScaleFactor(0.85)
+
                             Spacer()
+
                             Text("~\(partial) pts at day end")
                                 .font(.caption2)
                                 .fontWeight(.semibold)
-                                .foregroundStyle(
-                                    colorScheme == .dark
-                                        ? Color.orange.opacity(0.95)
-                                        : Color(red: 0.82, green: 0.33, blue: 0.02)
-                                )
+                                .foregroundStyle(.orange.opacity(0.92))
                         }
                     }
                 }
@@ -542,16 +553,12 @@ struct WeeklyProgressView: View {
         }
         .padding(10)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    colorScheme == .dark
-                        ? Color.orange.opacity(0.10)
-                        : Color(red: 1.0, green: 0.96, blue: 0.90)
-                )
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.orange.opacity(colorScheme == .dark ? 0.12 : 0.065))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: 14)
                         .stroke(
-                            Color.orange.opacity(colorScheme == .dark ? 0.12 : 0.16),
+                            Color.orange.opacity(colorScheme == .dark ? 0.16 : 0.18),
                             lineWidth: 1
                         )
                 )
@@ -562,19 +569,20 @@ struct WeeklyProgressView: View {
     // MARK: - All Done Banner
     // --------------------------------------------------------
     private var allDoneBanner: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 9) {
             Text("🎉")
                 .font(.subheadline)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("All goals completed today!")
                     .font(.caption)
                     .fontWeight(.semibold)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(primaryText)
 
                 Text("Bonus +25 ⭐ awarded")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
             }
 
             Spacer()
@@ -582,25 +590,26 @@ struct WeeklyProgressView: View {
             Text("+25 ⭐")
                 .font(.caption)
                 .fontWeight(.bold)
-                .foregroundStyle(brandSecondary)
+                .foregroundStyle(primaryText)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule()
+                        .fill(softBackground)
+                        .overlay(
+                            Capsule()
+                                .stroke(borderColor, lineWidth: 1)
+                        )
+                )
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 11)
         .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            brandPrimary.opacity(colorScheme == .dark ? 0.18 : 0.07),
-                            brandSecondary.opacity(colorScheme == .dark ? 0.16 : 0.06)
-                        ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+            RoundedRectangle(cornerRadius: 16)
+                .fill(softBackground)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(brandSecondary.opacity(0.18), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(borderColor, lineWidth: 1)
                 )
         )
     }
@@ -614,46 +623,53 @@ struct WeeklyProgressView: View {
 
     private func currentDayIndex() -> Int {
         let weekday = Calendar.current.component(
-            .weekday, from: Date()
+            .weekday,
+            from: Date()
         )
         return (weekday + 5) % 7
     }
 }
 
 // ============================================================
-// Preview
+// MARK: - Preview
 // ============================================================
 #Preview("Light") {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
-        for: Goal.self, GoalCompletion.self,
+        for: Goal.self,
+        GoalCompletion.self,
         configurations: config
     )
+
     let viewModel = GoalViewModel(
         modelContext: container.mainContext
     )
+
     ScrollView {
         WeeklyProgressView(viewModel: viewModel)
             .padding(16)
     }
-    .background(Color(.systemGroupedBackground))
+    .background(Color(red: 0.96, green: 0.96, blue: 0.97))
     .modelContainer(container)
 }
 
 #Preview("Dark") {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
     let container = try! ModelContainer(
-        for: Goal.self, GoalCompletion.self,
+        for: Goal.self,
+        GoalCompletion.self,
         configurations: config
     )
+
     let viewModel = GoalViewModel(
         modelContext: container.mainContext
     )
+
     ScrollView {
         WeeklyProgressView(viewModel: viewModel)
             .padding(16)
     }
-    .background(Color(.systemGroupedBackground))
+    .background(Color(red: 0.03, green: 0.03, blue: 0.035))
     .preferredColorScheme(.dark)
     .modelContainer(container)
 }

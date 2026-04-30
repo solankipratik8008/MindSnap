@@ -7,32 +7,16 @@
 
 // ============================================================
 // CalendarMoodView.swift
-// MindSnap — Beautiful animated mood calendar
+// MindSnap — Premium Monochrome Mood Calendar
 //
-// WHAT THIS FILE DOES:
-// Shows a full month calendar in the Insights tab where:
-//   - Each day has a colored mood dot
-//   - Days with entries are highlighted with mood color
-//   - Tapping a day shows what the user wrote
-//   - Month can be navigated with arrows
-//   - Smooth animations between months
-//
-// VISUAL DESIGN:
-//   ┌─────────────────────────────┐
-//   │  ← April 2026 →            │
-//   │  Mo Tu We Th Fr Sa Su      │
-//   │  ○  ○  😊 ○  😌 ○  ○      │
-//   │  😢 ○  ○  😰 ○  ○  😊     │
-//   │  ○  😐 ○  ○  😊 ○  ○      │
-//   └─────────────────────────────┘
-//   ┌─────────────────────────────┐
-//   │ Apr 14 — 😊 Happy           │
-//   │ "Today was absolutely..."   │
-//   └─────────────────────────────┘
-//
-// MVVM ROLE: View layer
-//            Receives entries array from InsightsView
-//            All calendar calculation logic is internal
+// SAFE UI UPDATE:
+// 1. Keeps same calendar calculation logic
+// 2. Keeps month navigation
+// 3. Keeps selected day detail
+// 4. Keeps entry preview
+// 5. Keeps haptics
+// 6. Updates UI to professional black/white theme
+// 7. Mood colors remain only as useful emotional accents
 // ============================================================
 
 import SwiftUI
@@ -40,50 +24,85 @@ import SwiftData
 
 struct CalendarMoodView: View {
 
-    // --------------------------------------------------------
-    // entries — All journal entries
-    // We filter by month/day internally
-    // --------------------------------------------------------
     let entries: [JournalEntry]
 
-    // --------------------------------------------------------
-    // currentMonth — Which month is currently displayed
-    // Starts as current month, arrows change it
-    // --------------------------------------------------------
     @State private var currentMonth: Date = Date()
-
-    // --------------------------------------------------------
-    // selectedDay — Which day user tapped
-    // nil = no day selected
-    // Date = show entries for that day below calendar
-    // --------------------------------------------------------
     @State private var selectedDay: Date? = nil
-
-    // --------------------------------------------------------
-    // animationDirection — Which way to animate month change
-    // 1 = forward (next month slides in from right)
-    // -1 = backward (prev month slides in from left)
-    // --------------------------------------------------------
     @State private var animationDirection: Int = 1
-
-    // --------------------------------------------------------
-    // showingEntries — Controls entry detail sheet
-    // --------------------------------------------------------
     @State private var showingEntries = false
 
     @Environment(\.colorScheme) private var colorScheme
 
-    // --------------------------------------------------------
-    // calendar — Shared calendar instance
-    // --------------------------------------------------------
     private let calendar = Calendar.current
 
     // --------------------------------------------------------
-    // MARK: - Computed Properties
+    // MARK: - Premium Theme
     // --------------------------------------------------------
+    private var cardBackground: Color {
+        colorScheme == .dark
+        ? Color(red: 0.09, green: 0.09, blue: 0.10)
+        : Color.white
+    }
+
+    private var softBackground: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.07)
+        : Color.black.opacity(0.045)
+    }
+
+    private var primaryText: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var secondaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.62)
+        : Color.black.opacity(0.52)
+    }
+
+    private var tertiaryText: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.38)
+        : Color.black.opacity(0.34)
+    }
+
+    private var borderColor: Color {
+        colorScheme == .dark
+        ? Color.white.opacity(0.08)
+        : Color.black.opacity(0.07)
+    }
+
+    private var primaryButtonBackground: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var primaryButtonText: Color {
+        colorScheme == .dark ? .black : .white
+    }
+
+    private var shadowColor: Color {
+        colorScheme == .dark
+        ? Color.clear
+        : Color.black.opacity(0.06)
+    }
+
+    private func premiumCard(cornerRadius: CGFloat = 20) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(cardBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(borderColor, lineWidth: 1)
+            )
+            .shadow(
+                color: shadowColor,
+                radius: 12,
+                x: 0,
+                y: 6
+            )
+    }
 
     // --------------------------------------------------------
-    // monthTitle — "April 2026" style string
+    // MARK: - Computed Properties
     // --------------------------------------------------------
     private var monthTitle: String {
         let formatter = DateFormatter()
@@ -91,42 +110,31 @@ struct CalendarMoodView: View {
         return formatter.string(from: currentMonth)
     }
 
-    // --------------------------------------------------------
-    // daysInMonth — Array of dates for current month grid
-    //
-    // Includes padding days from previous month to fill
-    // the first row. E.g. if month starts on Wednesday,
-    // Monday and Tuesday are filled with previous month days.
-    //
-    // Returns 42 dates (6 rows × 7 days) for consistent grid.
-    // --------------------------------------------------------
     private var daysInMonth: [Date?] {
-        // Get first day of current month
         guard let firstDay = calendar.date(
             from: calendar.dateComponents(
                 [.year, .month],
                 from: currentMonth
             )
-        ) else { return [] }
+        ) else {
+            return []
+        }
 
-        // Get number of days in month
         guard let range = calendar.range(
             of: .day,
             in: .month,
             for: firstDay
-        ) else { return [] }
+        ) else {
+            return []
+        }
 
-        // Get weekday of first day (1=Sun, 2=Mon... 7=Sat)
         let firstWeekday = calendar.component(
             .weekday,
             from: firstDay
         )
 
-        // Adjust for Monday-first calendar
-        // iOS weekday: 1=Sun, 2=Mon... we want 1=Mon
         let paddingDays = (firstWeekday + 5) % 7
 
-        // Build array: nil for padding + dates for month
         var days: [Date?] = Array(repeating: nil, count: paddingDays)
 
         for day in range {
@@ -139,7 +147,6 @@ struct CalendarMoodView: View {
             }
         }
 
-        // Pad end to complete last row
         while days.count % 7 != 0 {
             days.append(nil)
         }
@@ -147,18 +154,13 @@ struct CalendarMoodView: View {
         return days
     }
 
-    // --------------------------------------------------------
-    // weekdayHeaders — ["Mo", "Tu", "We"...]
-    // --------------------------------------------------------
     private var weekdayHeaders: [String] {
         ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
     }
 
-    // --------------------------------------------------------
-    // selectedDayEntries — Entries for the selected day
-    // --------------------------------------------------------
     private var selectedDayEntries: [JournalEntry] {
         guard let day = selectedDay else { return [] }
+
         return entries.filter { entry in
             calendar.isDate(entry.date, inSameDayAs: day)
         }
@@ -170,53 +172,41 @@ struct CalendarMoodView: View {
     var body: some View {
         VStack(spacing: 0) {
 
-            // ---- Calendar Card ----
             VStack(spacing: 16) {
-
-                // ---- Month Navigation Header ----
                 monthHeader
-
-                // ---- Weekday Labels ----
                 weekdayRow
 
-                // ---- Day Grid ----
-                // Animated transition between months
                 dayGrid
-                    .id(currentMonth) // Forces re-render on month change
+                    .id(currentMonth)
                     .transition(
                         .asymmetric(
                             insertion: .move(
                                 edge: animationDirection > 0
-                                    ? .trailing : .leading
-                            ).combined(with: .opacity),
+                                ? .trailing
+                                : .leading
+                            )
+                            .combined(with: .opacity),
                             removal: .move(
                                 edge: animationDirection > 0
-                                    ? .leading : .trailing
-                            ).combined(with: .opacity)
+                                ? .leading
+                                : .trailing
+                            )
+                            .combined(with: .opacity)
                         )
                     )
 
-                // ---- Legend ----
                 moodLegend
             }
             .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(.systemBackground))
-                    .shadow(
-                        color: .black.opacity(
-                            colorScheme == .dark ? 0.3 : 0.08
-                        ),
-                        radius: 12, x: 0, y: 4
-                    )
-            )
+            .background(premiumCard(cornerRadius: 22))
 
-            // ---- Selected Day Detail ----
             if let day = selectedDay {
                 selectedDayDetail(for: day)
-                    .transition(.opacity.combined(
-                        with: .move(edge: .top)
-                    ))
+                    .transition(
+                        .opacity.combined(
+                            with: .move(edge: .top)
+                        )
+                    )
                     .padding(.top, 12)
             }
         }
@@ -224,78 +214,91 @@ struct CalendarMoodView: View {
     }
 
     // --------------------------------------------------------
-    // MARK: - Subviews
-    // --------------------------------------------------------
-
-    // --------------------------------------------------------
-    // monthHeader
-    //
-    // Shows month name with left/right navigation arrows.
-    // Tapping arrows animates to previous/next month.
+    // MARK: - Month Header
     // --------------------------------------------------------
     private var monthHeader: some View {
         HStack {
-            // ---- Previous month button ----
             Button {
                 navigateMonth(by: -1)
             } label: {
-                Image(systemName: "chevron.left.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.purple.opacity(0.7))
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(primaryText)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        Circle()
+                            .fill(softBackground)
+                            .overlay(
+                                Circle()
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            VStack(spacing: 2) {
+                Text(monthTitle)
+                    .font(.headline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(primaryText)
+
+                Text("Mood history")
+                    .font(.caption2)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
             }
 
             Spacer()
 
-            // ---- Month + Year title ----
-            Text(monthTitle)
-                .font(.headline)
-                .fontWeight(.bold)
-                .foregroundStyle(.primary)
-
-            Spacer()
-
-            // ---- Next month button ----
-            // Disabled if current month is this month
-            // (can't see future entries)
             Button {
                 navigateMonth(by: 1)
             } label: {
-                Image(systemName: "chevron.right.circle.fill")
-                    .font(.title2)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(
                         isCurrentMonthOrLater
-                            ? Color.gray.opacity(0.3)
-                            : Color.purple.opacity(0.7)
+                        ? tertiaryText
+                        : primaryText
+                    )
+                    .frame(width: 34, height: 34)
+                    .background(
+                        Circle()
+                            .fill(
+                                isCurrentMonthOrLater
+                                ? softBackground.opacity(0.65)
+                                : softBackground
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
                     )
             }
+            .buttonStyle(.plain)
             .disabled(isCurrentMonthOrLater)
         }
     }
 
     // --------------------------------------------------------
-    // weekdayRow — Mo Tu We Th Fr Sa Su header
+    // MARK: - Weekday Row
     // --------------------------------------------------------
     private var weekdayRow: some View {
         HStack(spacing: 0) {
             ForEach(weekdayHeaders, id: \.self) { day in
                 Text(day)
                     .font(.caption2)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
+                    .fontWeight(.bold)
+                    .foregroundStyle(secondaryText)
                     .frame(maxWidth: .infinity)
             }
         }
+        .padding(.top, 2)
     }
 
     // --------------------------------------------------------
-    // dayGrid — The main calendar grid
-    //
-    // 7 columns × n rows grid of day cells.
-    // Each cell shows:
-    //   - Day number
-    //   - Mood emoji (if entry exists)
-    //   - Colored circle background (if entry exists)
-    //   - Selected state (purple ring)
+    // MARK: - Day Grid
     // --------------------------------------------------------
     private var dayGrid: some View {
         let columns = Array(
@@ -308,7 +311,6 @@ struct CalendarMoodView: View {
                 if let date = date {
                     dayCell(for: date)
                 } else {
-                    // Empty padding cell
                     Color.clear
                         .frame(height: 44)
                 }
@@ -317,23 +319,16 @@ struct CalendarMoodView: View {
     }
 
     // --------------------------------------------------------
-    // dayCell(for:)
-    //
-    // A single day cell in the calendar grid.
-    //
-    // States:
-    //   Has entry → colored circle + mood emoji
-    //   No entry  → plain day number
-    //   Selected  → purple ring around cell
-    //   Today     → underline below number
-    //   Future    → grayed out
+    // MARK: - Day Cell
     // --------------------------------------------------------
     private func dayCell(for date: Date) -> some View {
         let dayEntries = entriesFor(date: date)
         let dominantMood = dominantMoodFor(entries: dayEntries)
+
         let isSelected = selectedDay.map {
             calendar.isDate($0, inSameDayAs: date)
         } ?? false
+
         let isToday = calendar.isDateInToday(date)
         let isFuture = date > Date()
         let dayNumber = calendar.component(.day, from: date)
@@ -341,71 +336,85 @@ struct CalendarMoodView: View {
         return Button {
             if !isFuture {
                 withAnimation(.spring(duration: 0.3, bounce: 0.3)) {
-                    // Toggle selection — tap again to deselect
                     if isSelected {
                         selectedDay = nil
                     } else {
                         selectedDay = date
-                        // Light haptic on day tap
-                        let haptic = UIImpactFeedbackGenerator(
-                            style: .light
-                        )
+
+                        let haptic = UIImpactFeedbackGenerator(style: .light)
                         haptic.impactOccurred()
                     }
                 }
             }
         } label: {
             ZStack {
-                // ---- Background circle (if has entries) ----
                 if let mood = dominantMood {
                     Circle()
-                        .fill(mood.color.opacity(
-                            colorScheme == .dark ? 0.35 : 0.2
-                        ))
+                        .fill(
+                            mood.color.opacity(
+                                colorScheme == .dark ? 0.26 : 0.14
+                            )
+                        )
                         .frame(width: 40, height: 40)
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    mood.color.opacity(
+                                        colorScheme == .dark ? 0.20 : 0.16
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
+                } else if isToday {
+                    Circle()
+                        .fill(softBackground)
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Circle()
+                                .stroke(primaryText.opacity(0.20), lineWidth: 1)
+                        )
                 }
 
-                // ---- Selected ring ----
                 if isSelected {
                     Circle()
-                        .stroke(Color.purple, lineWidth: 2.5)
-                        .frame(width: 42, height: 42)
+                        .stroke(primaryText, lineWidth: 2.5)
+                        .frame(width: 43, height: 43)
                 }
 
-                VStack(spacing: 0) {
+                VStack(spacing: 1) {
                     if let mood = dominantMood {
-                        // Has entry — show emoji
                         Text(mood.emoji)
                             .font(.system(size: 18))
                     } else {
-                        // No entry — show day number
                         Text("\(dayNumber)")
                             .font(.system(size: 14))
                             .fontWeight(isToday ? .bold : .regular)
                             .foregroundStyle(
                                 isFuture
-                                    ? Color.secondary.opacity(0.4)
-                                    : isToday
-                                        ? Color.purple
-                                        : Color.primary
+                                ? tertiaryText.opacity(0.65)
+                                : isToday
+                                    ? primaryText
+                                    : secondaryText
                             )
 
-                        // Today indicator dot
                         if isToday {
                             Circle()
-                                .fill(Color.purple)
+                                .fill(primaryText)
                                 .frame(width: 4, height: 4)
                         }
                     }
                 }
             }
             .frame(height: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(isFuture)
+        .opacity(isFuture ? 0.55 : 1.0)
     }
 
     // --------------------------------------------------------
-    // moodLegend — Small colored dots with mood names
+    // MARK: - Mood Legend
     // --------------------------------------------------------
     private var moodLegend: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -413,81 +422,99 @@ struct CalendarMoodView: View {
                 ForEach(MoodType.allCases, id: \.self) { mood in
                     HStack(spacing: 4) {
                         Circle()
-                            .fill(mood.color.opacity(0.7))
+                            .fill(mood.color.opacity(colorScheme == .dark ? 0.85 : 0.70))
                             .frame(width: 8, height: 8)
+
                         Text(mood.emoji)
                             .font(.caption2)
+
                         Text(mood.displayName)
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .fontWeight(.medium)
+                            .foregroundStyle(secondaryText)
                     }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(softBackground)
+                            .overlay(
+                                Capsule()
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
+                    )
                 }
             }
         }
     }
 
     // --------------------------------------------------------
-    // selectedDayDetail(for:)
-    //
-    // Shows a card below the calendar with entries
-    // for the selected day.
-    //
-    // States:
-    //   Has entries → shows each entry with mood + preview
-    //   No entries  → shows "No entries" message
+    // MARK: - Selected Day Detail
     // --------------------------------------------------------
     private func selectedDayDetail(for date: Date) -> some View {
         VStack(alignment: .leading, spacing: 12) {
 
-            // ---- Header ----
             HStack {
-                // Date title
                 VStack(alignment: .leading, spacing: 2) {
                     Text(formattedSelectedDate(date))
                         .font(.headline)
                         .fontWeight(.bold)
+                        .foregroundStyle(primaryText)
 
                     if selectedDayEntries.isEmpty {
                         Text("No entries this day")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .fontWeight(.medium)
+                            .foregroundStyle(secondaryText)
                     } else {
                         Text("\(selectedDayEntries.count) \(selectedDayEntries.count == 1 ? "entry" : "entries")")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .fontWeight(.medium)
+                            .foregroundStyle(secondaryText)
                     }
                 }
 
                 Spacer()
 
-                // Close button
                 Button {
                     withAnimation(.spring(duration: 0.3)) {
                         selectedDay = nil
                     }
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(.secondary)
-                        .font(.title3)
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(primaryText)
+                        .frame(width: 30, height: 30)
+                        .background(
+                            Circle()
+                                .fill(softBackground)
+                                .overlay(
+                                    Circle()
+                                        .stroke(borderColor, lineWidth: 1)
+                                )
+                        )
                 }
+                .buttonStyle(.plain)
             }
 
             if selectedDayEntries.isEmpty {
-                // ---- Empty state ----
                 HStack {
                     Spacer()
+
                     VStack(spacing: 8) {
                         Text("📝")
                             .font(.largeTitle)
+
                         Text("Nothing written this day")
                             .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                            .fontWeight(.medium)
+                            .foregroundStyle(secondaryText)
                     }
+
                     Spacer()
                 }
                 .padding(.vertical, 16)
             } else {
-                // ---- Entry list ----
                 ForEach(selectedDayEntries) { entry in
                     entryDetailRow(entry: entry)
 
@@ -498,43 +525,38 @@ struct CalendarMoodView: View {
             }
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemBackground))
-                .shadow(
-                    color: .black.opacity(
-                        colorScheme == .dark ? 0.3 : 0.08
-                    ),
-                    radius: 8, x: 0, y: 3
-                )
-        )
+        .background(premiumCard(cornerRadius: 20))
     }
 
     // --------------------------------------------------------
-    // entryDetailRow(entry:)
-    //
-    // A single entry row in the selected day detail card.
-    // Shows: emoji, mood name, time, and text preview.
+    // MARK: - Entry Detail Row
     // --------------------------------------------------------
     private func entryDetailRow(entry: JournalEntry) -> some View {
         HStack(alignment: .top, spacing: 12) {
 
-            // ---- Mood emoji in colored circle ----
             ZStack {
                 Circle()
-                    .fill(entry.moodType.color.opacity(
-                        colorScheme == .dark ? 0.3 : 0.15
-                    ))
+                    .fill(
+                        entry.moodType.color.opacity(
+                            colorScheme == .dark ? 0.22 : 0.11
+                        )
+                    )
                     .frame(width: 44, height: 44)
+                    .overlay(
+                        Circle()
+                            .stroke(
+                                entry.moodType.color.opacity(0.18),
+                                lineWidth: 1
+                            )
+                    )
+
                 Text(entry.moodType.emoji)
                     .font(.title3)
             }
 
-            // ---- Entry details ----
             VStack(alignment: .leading, spacing: 4) {
 
                 HStack {
-                    // Mood name
                     Text(entry.moodType.displayName)
                         .font(.subheadline)
                         .fontWeight(.semibold)
@@ -542,39 +564,39 @@ struct CalendarMoodView: View {
 
                     Spacer()
 
-                    // Time of entry
                     Text(entryTime(entry.date))
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .fontWeight(.medium)
+                        .foregroundStyle(secondaryText)
                 }
 
-                // Entry text preview
                 Text(entry.previewText)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(secondaryText)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
 
-                // Score badge
-                HStack(spacing: 4) {
-                    Text(String(format: "Score: %+.2f",
-                                entry.sentimentScore))
+                HStack(spacing: 6) {
+                    Text(String(format: "Score: %+.2f", entry.sentimentScore))
                         .font(.caption2)
+                        .fontWeight(.semibold)
                         .foregroundStyle(entry.moodType.color)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
                         .background(
                             Capsule()
-                                .fill(entry.moodType.color.opacity(
-                                    colorScheme == .dark ? 0.2 : 0.1
-                                ))
+                                .fill(
+                                    entry.moodType.color.opacity(
+                                        colorScheme == .dark ? 0.16 : 0.10
+                                    )
+                                )
                         )
 
-                    // Tags if any
                     if !entry.tags.isEmpty {
                         Text("\(entry.tags.count) tags")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .fontWeight(.medium)
+                            .foregroundStyle(secondaryText)
                     }
                 }
             }
@@ -585,96 +607,81 @@ struct CalendarMoodView: View {
     // --------------------------------------------------------
     // MARK: - Helpers
     // --------------------------------------------------------
-
-    // --------------------------------------------------------
-    // navigateMonth(by:)
-    // Moves calendar forward or backward by one month
-    // --------------------------------------------------------
     private func navigateMonth(by value: Int) {
         animationDirection = value
+
         withAnimation(.easeInOut(duration: 0.35)) {
             currentMonth = calendar.date(
                 byAdding: .month,
                 value: value,
                 to: currentMonth
             ) ?? currentMonth
-            // Clear selection when changing months
+
             selectedDay = nil
         }
 
-        // Light haptic on month change
         let haptic = UIImpactFeedbackGenerator(style: .light)
         haptic.impactOccurred()
     }
 
-    // --------------------------------------------------------
-    // entriesFor(date:)
-    // Returns all entries written on a specific date
-    // --------------------------------------------------------
     private func entriesFor(date: Date) -> [JournalEntry] {
         entries.filter { entry in
             calendar.isDate(entry.date, inSameDayAs: date)
         }
     }
 
-    // --------------------------------------------------------
-    // dominantMoodFor(entries:)
-    // Returns the most common mood from a set of entries
-    // Returns nil if no entries
-    // --------------------------------------------------------
     private func dominantMoodFor(
         entries: [JournalEntry]
     ) -> MoodType? {
         guard !entries.isEmpty else { return nil }
 
         var moodCounts: [MoodType: Int] = [:]
+
         for entry in entries {
             moodCounts[entry.moodType, default: 0] += 1
         }
+
         return moodCounts.max(by: { $0.value < $1.value })?.key
     }
 
-    // --------------------------------------------------------
-    // isCurrentMonthOrLater
-    // True if displaying current or future month
-    // Used to disable the "next month" button
-    // --------------------------------------------------------
     private var isCurrentMonthOrLater: Bool {
         let currentComponents = calendar.dateComponents(
             [.year, .month],
             from: Date()
         )
+
         let displayComponents = calendar.dateComponents(
             [.year, .month],
             from: currentMonth
         )
+
         guard
             let currentYear = currentComponents.year,
             let currentMonthNum = currentComponents.month,
             let displayYear = displayComponents.year,
             let displayMonthNum = displayComponents.month
-        else { return false }
+        else {
+            return false
+        }
 
-        if displayYear > currentYear { return true }
+        if displayYear > currentYear {
+            return true
+        }
+
         if displayYear == currentYear &&
-           displayMonthNum >= currentMonthNum { return true }
+            displayMonthNum >= currentMonthNum {
+            return true
+        }
+
         return false
     }
 
-    // --------------------------------------------------------
-    // formattedSelectedDate(_:)
-    // "Wednesday, April 14" style string
-    // --------------------------------------------------------
     private func formattedSelectedDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "EEEE, MMMM d"
         return formatter.string(from: date)
     }
 
-    // --------------------------------------------------------
-    // entryTime(_:)
-    // "9:30 AM" style time string
-    // --------------------------------------------------------
     private func entryTime(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
@@ -685,21 +692,20 @@ struct CalendarMoodView: View {
 // ============================================================
 // Preview
 // ============================================================
-#Preview {
+#Preview("Light Mode") {
     let calendar = Calendar.current
 
-    // Create sample entries for this month
     let sampleData: [(Int, MoodType, Double, String)] = [
-        (1,  .happy,   0.82, "Great start to the month!"),
-        (3,  .calm,    0.35, "Peaceful morning walk."),
-        (5,  .anxious, -0.45, "Big presentation today."),
-        (8,  .happy,   0.91, "Weekend was amazing!"),
+        (1, .happy, 0.82, "Great start to the month!"),
+        (3, .calm, 0.35, "Peaceful morning walk."),
+        (5, .anxious, -0.45, "Big presentation today."),
+        (8, .happy, 0.91, "Weekend was amazing!"),
         (10, .neutral, 0.02, "Regular Tuesday."),
-        (12, .sad,     -0.67, "Feeling a bit down."),
-        (15, .calm,    0.41, "Good meditation session."),
-        (17, .happy,   0.78, "Got great news!"),
+        (12, .sad, -0.67, "Feeling a bit down."),
+        (15, .calm, 0.41, "Good meditation session."),
+        (17, .happy, 0.78, "Got great news!"),
         (19, .anxious, -0.38, "Deadline coming up."),
-        (22, .happy,   0.88, "Best day in a while!")
+        (22, .happy, 0.88, "Best day in a while!")
     ]
 
     let entries = sampleData.compactMap { day, mood, score, text -> JournalEntry? in
@@ -708,9 +714,11 @@ struct CalendarMoodView: View {
             from: Date()
         )
         components.day = day
+
         guard let date = calendar.date(from: components) else {
             return nil
         }
+
         let entry = JournalEntry(
             text: text,
             moodType: mood,
@@ -724,6 +732,46 @@ struct CalendarMoodView: View {
         CalendarMoodView(entries: entries)
             .padding(16)
     }
-    .background(Color(.systemGroupedBackground))
+    .background(Color(red: 0.96, green: 0.96, blue: 0.97))
+    .modelContainer(for: JournalEntry.self, inMemory: true)
+}
+
+#Preview("Dark Mode") {
+    let calendar = Calendar.current
+
+    let sampleData: [(Int, MoodType, Double, String)] = [
+        (1, .happy, 0.82, "Great start to the month!"),
+        (3, .calm, 0.35, "Peaceful morning walk."),
+        (5, .anxious, -0.45, "Big presentation today."),
+        (8, .happy, 0.91, "Weekend was amazing!"),
+        (10, .neutral, 0.02, "Regular Tuesday.")
+    ]
+
+    let entries = sampleData.compactMap { day, mood, score, text -> JournalEntry? in
+        var components = calendar.dateComponents(
+            [.year, .month],
+            from: Date()
+        )
+        components.day = day
+
+        guard let date = calendar.date(from: components) else {
+            return nil
+        }
+
+        let entry = JournalEntry(
+            text: text,
+            moodType: mood,
+            sentimentScore: score
+        )
+        entry.date = date
+        return entry
+    }
+
+    ScrollView {
+        CalendarMoodView(entries: entries)
+            .padding(16)
+    }
+    .background(Color(red: 0.03, green: 0.03, blue: 0.035))
+    .preferredColorScheme(.dark)
     .modelContainer(for: JournalEntry.self, inMemory: true)
 }

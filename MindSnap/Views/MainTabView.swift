@@ -2,11 +2,20 @@
 //  MainTabView.swift
 //  MindSnap
 //
+//
+//  MainTabView.swift
+//  MindSnap
+//
 // ============================================================
 // MainTabView.swift
 // MindSnap — DEEP LINK + SCENE PHASE FIXED
 //
-// FIXES:
+// UI UPDATE:
+// 1. Professional black/white tab bar theme
+// 2. Light/Dark mode adaptive tint
+// 3. Clean tab bar background
+//
+// FUNCTIONALITY KEPT:
 // 1. Notification tap → Goals tab opens after unlock
 // 2. pendingTabSwitch stored when app is locked
 // 3. Applied after Face ID unlock succeeds
@@ -24,6 +33,7 @@ struct MainTabView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var journalViewModel: JournalViewModel?
     @State private var authService = AuthService()
@@ -44,6 +54,19 @@ struct MainTabView: View {
     // Track last active date for partial points
     @AppStorage("lastActiveDate")
     private var lastActiveDateString = ""
+
+    // --------------------------------------------------------
+    // MARK: - Premium Theme Helpers
+    // --------------------------------------------------------
+    private var tabTintColor: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var tabBarBackgroundColor: Color {
+        colorScheme == .dark
+        ? Color.black.opacity(0.96)
+        : Color.white.opacity(0.96)
+    }
 
     // --------------------------------------------------------
     // MARK: - Body
@@ -201,7 +224,15 @@ struct MainTabView: View {
             }
             .tag(3)
         }
-        .tint(.purple)
+        .tint(tabTintColor)
+        .toolbarBackground(
+            tabBarBackgroundColor,
+            for: .tabBar
+        )
+        .toolbarBackground(
+            .visible,
+            for: .tabBar
+        )
     }
 
     // --------------------------------------------------------
@@ -264,7 +295,9 @@ struct MainTabView: View {
     ) {
         switch phase {
         case .background:
-            authService.lockApp()
+            if isFaceIDEnabled {
+                authService.lockApp()
+            }
 
         case .active:
             if !isFaceIDEnabled {

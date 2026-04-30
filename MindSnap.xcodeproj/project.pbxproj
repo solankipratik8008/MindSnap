@@ -71,6 +71,7 @@
 		7E888D4B2F98105F0063FB27 /* Exceptions for "MindSnap" folder in "MindSnapWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Assets.xcassets,
 				Models/Goal.swift,
 				Models/GoalCompletion.swift,
 				Models/GoalEnums.swift,
