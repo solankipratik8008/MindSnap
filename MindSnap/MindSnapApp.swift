@@ -14,6 +14,7 @@
 // 2. NotificationDelegate stored as singleton (never lost)
 // 3. All 3 models in same schema
 // 4. Named store for stable persistence
+// 5. Tracks CloudKit/local fallback mode for Settings sync status
 // ============================================================
 
 import SwiftUI
@@ -52,22 +53,27 @@ class NotificationDelegate: NSObject,
     ) {
         let userInfo = response.notification
             .request.content.userInfo
+
         let type = userInfo["type"] as? String ?? ""
 
         DispatchQueue.main.async {
             switch type {
-            case "goal_reminder", "goal_expiry",
-                 "partial_points", "healthkit_sync",
+            case "goal_reminder",
+                 "goal_expiry",
+                 "partial_points",
+                 "healthkit_sync",
                  "health_warning":
                 NotificationCenter.default.post(
                     name: NSNotification.Name("OpenGoalsTab"),
                     object: nil
                 )
+
             case "mindsnap_journal":
                 NotificationCenter.default.post(
                     name: NSNotification.Name("OpenJournalTab"),
                     object: nil
                 )
+
             default:
                 NotificationCenter.default.post(
                     name: NSNotification.Name("OpenGoalsTab"),
@@ -75,8 +81,56 @@ class NotificationDelegate: NSObject,
                 )
             }
         }
+
         completionHandler()
     }
+}
+
+// --------------------------------------------------------
+// CloudSyncMode
+//
+// Stores how MindSnap persistence was created.
+// This is only for user-facing sync status in Settings.
+// It does NOT change saving logic or CloudKit behavior.
+// --------------------------------------------------------
+enum CloudSyncMode: String {
+    case cloudKit = "cloudKit"
+    case localFallback = "localFallback"
+    case recoveredLocal = "recoveredLocal"
+    case memoryOnly = "memoryOnly"
+
+    var displayTitle: String {
+        switch self {
+        case .cloudKit:
+            return "iCloud Sync Ready"
+        case .localFallback:
+            return "Local Storage Mode"
+        case .recoveredLocal:
+            return "Recovered Local Storage"
+        case .memoryOnly:
+            return "Temporary Storage Mode"
+        }
+    }
+
+    var displayMessage: String {
+        switch self {
+        case .cloudKit:
+            return "MindSnap started with iCloud sync support."
+        case .localFallback:
+            return "MindSnap could not start CloudKit storage and is using local storage for now."
+        case .recoveredLocal:
+            return "MindSnap recovered from a storage issue and recreated local storage."
+        case .memoryOnly:
+            return "MindSnap is running in temporary memory-only mode. Data may not persist after closing the app."
+        }
+    }
+}
+
+private func saveCloudSyncMode(_ mode: CloudSyncMode) {
+    UserDefaults.standard.set(
+        mode.rawValue,
+        forKey: "mindsnapCloudSyncMode"
+    )
 }
 
 // --------------------------------------------------------
@@ -95,13 +149,12 @@ struct MindSnapApp: App {
     // sharedModelContainer
     //
     // MIGRATION STRATEGY:
-    // 1. Try named config (stable, preferred)
-    // 2. If fails → try without name (fallback)
-    // 3. If both fail → delete corrupt store and recreate
-    //    (user loses old goals but app works again)
+    // 1. Try named CloudKit config
+    // 2. If CloudKit config fails → use local fallback
+    // 3. If local store is corrupt → delete corrupt store and recreate local store
+    // 4. Absolute last resort → memory-only container
     //
-    // This 3-step approach means the app NEVER crashes
-    // from a migration error — it always recovers.
+    // This keeps the app from crashing on launch.
     // --------------------------------------------------------
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -110,7 +163,7 @@ struct MindSnapApp: App {
             GoalCompletion.self
         ])
 
-        // ---- Step 1: Try named config ----
+        // ---- Step 1: Try CloudKit config ----
         do {
             let config = ModelConfiguration(
                 "MindSnapStore",
@@ -120,62 +173,65 @@ struct MindSnapApp: App {
                 groupContainer: .identifier("group.com.pratik.MindSnap"),
                 cloudKitDatabase: .private("iCloud.com.pratik.MindSnap")
             )
-            return try ModelContainer(
+
+            let container = try ModelContainer(
                 for: schema,
                 configurations: [config]
             )
+
+            saveCloudSyncMode(.cloudKit)
+            return container
+
         } catch {
-            print("Named config failed: \(error)")
+            print("CloudKit config failed: \(error)")
         }
 
-        // ---- Step 2: Try default config ----
+        // ---- Step 2: Try local fallback config ----
         do {
             let config = ModelConfiguration(
                 "MindSnapStore",
                 schema: schema,
                 isStoredInMemoryOnly: false,
+                allowsSave: true,
                 groupContainer: .identifier("group.com.pratik.MindSnap"),
                 cloudKitDatabase: .none
             )
-            return try ModelContainer(
+
+            let container = try ModelContainer(
                 for: schema,
                 configurations: [config]
             )
+
+            saveCloudSyncMode(.localFallback)
+            return container
+
         } catch {
-            print("Default config failed: \(error)")
+            print("Local fallback config failed: \(error)")
         }
 
-        // ---- Step 3: Delete corrupt store + recreate ----
-        // This only runs if database is completely corrupt.
-        // Journal entries are safe because JournalEntry model
-        // has not changed — only Goal/GoalCompletion changed.
+        // ---- Step 3: Delete corrupt store + recreate local store ----
         do {
-            // Find and delete the corrupt store file
             let storeURL = URL.applicationSupportDirectory
                 .appendingPathComponent("MindSnapStore.store")
-            if FileManager.default.fileExists(
-                atPath: storeURL.path
-            ) {
+
+            if FileManager.default.fileExists(atPath: storeURL.path) {
                 try FileManager.default.removeItem(at: storeURL)
-                print("Deleted corrupt store, recreating...")
+                print("Deleted corrupt MindSnapStore.store, recreating...")
             }
 
-            // Also try alternate store locations
             let altURLs = [
                 URL.applicationSupportDirectory
                     .appendingPathComponent("default.store"),
                 URL.applicationSupportDirectory
                     .appendingPathComponent("MindSnap.store")
             ]
+
             for url in altURLs {
-                if FileManager.default.fileExists(
-                    atPath: url.path
-                ) {
+                if FileManager.default.fileExists(atPath: url.path) {
                     try? FileManager.default.removeItem(at: url)
                 }
             }
 
-            // Recreate fresh
             let freshConfig = ModelConfiguration(
                 "MindSnapStore",
                 schema: schema,
@@ -184,21 +240,27 @@ struct MindSnapApp: App {
                 groupContainer: .identifier("group.com.pratik.MindSnap"),
                 cloudKitDatabase: .none
             )
-            return try ModelContainer(
+
+            let container = try ModelContainer(
                 for: schema,
                 configurations: [freshConfig]
             )
+
+            saveCloudSyncMode(.recoveredLocal)
+            return container
+
         } catch {
             print("Recovery failed: \(error)")
         }
 
-        // ---- Absolute last resort: in-memory ----
-        // App still works, data won't persist this session
-        // but at least it doesn't crash
+        // ---- Step 4: Absolute last resort: memory-only ----
         let memConfig = ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: true
         )
+
+        saveCloudSyncMode(.memoryOnly)
+
         return try! ModelContainer(
             for: schema,
             configurations: [memConfig]
@@ -240,3 +302,4 @@ struct MindSnapApp: App {
             NotificationDelegate.shared
     }
 }
+

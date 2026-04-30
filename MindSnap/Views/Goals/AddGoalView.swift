@@ -34,6 +34,9 @@ struct AddGoalView: View {
 
     @AppStorage("isHealthSyncEnabled")
     private var isHealthSyncEnabled = false
+    
+    @AppStorage("hasSeenAddGoalCoachMark")
+    private var hasSeenAddGoalCoachMark = false
 
     // ---- Basic info ----
     @State private var goalName = ""
@@ -43,6 +46,11 @@ struct AddGoalView: View {
     @State private var selectedType = GoalType.checkbox
     @State private var selectedActivityType = GoalActivityType.custom
     @State private var selectedPriority = GoalPriority.medium
+    
+    
+    @State private var showingAddGoalCoachMark = false
+    @State private var addGoalCoachStep = 0
+    @State private var addGoalCoachAnimate = false
 
     // ---- Progress ----
     @State private var targetValue = 1
@@ -197,38 +205,48 @@ struct AddGoalView: View {
     // --------------------------------------------------------
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(spacing: 16) {
+            ZStack {
+                ScrollView {
+                    LazyVStack(spacing: 16) {
 
-                    if !isEditMode {
-                        presetGoalsSection
+                        if !isEditMode {
+                            presetGoalsSection
+                        }
+
+                        if showingDuplicateError {
+                            duplicateErrorBanner
+                                .transition(
+                                    .move(edge: .top)
+                                    .combined(with: .opacity)
+                                )
+                        }
+
+                        goalNameSection
+                        prioritySection
+                        categorySection
+                        goalTypeSection
+
+                        if selectedType == .progress {
+                            progressTargetSection
+                        }
+
+                        iconPickerSection
+                        repeatSection
+                        remindersSection
                     }
-
-                    if showingDuplicateError {
-                        duplicateErrorBanner
-                            .transition(
-                                .move(edge: .top)
-                                .combined(with: .opacity)
-                            )
-                    }
-
-                    goalNameSection
-                    prioritySection
-                    categorySection
-                    goalTypeSection
-
-                    if selectedType == .progress {
-                        progressTargetSection
-                    }
-
-                    iconPickerSection
-                    repeatSection
-                    remindersSection
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
+                    .padding(.bottom, 40)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 40)
+                .background(appBackground)
+
+                if showingAddGoalCoachMark {
+                    addGoalCoachMarkOverlay
+                        .transition(.opacity)
+                        .zIndex(50)
+                }
             }
+            .background(appBackground)
             .background(appBackground)
             .navigationTitle(isEditMode ? "Edit Goal" : "New Goal")
             .navigationBarTitleDisplayMode(.inline)
@@ -283,6 +301,7 @@ struct AddGoalView: View {
             }
 
             updateUnitsForActivity()
+            presentAddGoalCoachMarkIfNeeded()
         }
         .onChange(of: goalName) { _, newName in
             let detected = GoalActivityType.detect(from: newName)
@@ -1778,6 +1797,446 @@ struct AddGoalView: View {
             return "paintbrush.fill"
         case .custom:
             return "star.fill"
+        }
+    }
+    
+    
+    // --------------------------------------------------------
+    // MARK: - Add Goal Coach Mark
+    // --------------------------------------------------------
+    private struct AddGoalCoachStep {
+        let emoji: String
+        let title: String
+        let message: String
+        let bullets: [String]
+        let accent: Color
+    }
+
+    private var addGoalCoachSteps: [AddGoalCoachStep] {
+        [
+            AddGoalCoachStep(
+                emoji: "⚡",
+                title: "Quick Add Presets",
+                message: "Use ready-made goals when you want to start fast. Presets fill in useful details automatically.",
+                bullets: [
+                    "Tap a preset to auto-fill",
+                    "Good for common habits",
+                    "You can still customize after"
+                ],
+                accent: .yellow
+            ),
+            AddGoalCoachStep(
+                emoji: "✍️",
+                title: "Name Your Goal",
+                message: "Write a clear goal name. MindSnap can suggest emojis and detect activity types from what you type.",
+                bullets: [
+                    "Example: Morning Run",
+                    "Emoji can be changed",
+                    "Activity can be detected"
+                ],
+                accent: .blue
+            ),
+            AddGoalCoachStep(
+                emoji: "🚨",
+                title: "Set Priority",
+                message: "Priority helps important goals stand out. High priority goals appear more clearly on the Goals screen.",
+                bullets: [
+                    "High for must-do goals",
+                    "Medium for normal goals",
+                    "Low for flexible goals"
+                ],
+                accent: .red
+            ),
+            AddGoalCoachStep(
+                emoji: "📊",
+                title: "Choose Tracking Type",
+                message: "Checkbox goals are simple yes/no goals. Progress goals track numbers like steps, glasses, pages, or minutes.",
+                bullets: [
+                    "Checkbox: complete once",
+                    "Progress: track amount",
+                    "Progress goals can earn partial points"
+                ],
+                accent: .purple
+            ),
+            AddGoalCoachStep(
+                emoji: "🎯",
+                title: "Set Daily Target",
+                message: "For progress goals, choose a realistic target and unit. Smaller targets are easier to keep consistently.",
+                bullets: [
+                    "Set target amount",
+                    "Choose the right unit",
+                    "Use quick values"
+                ],
+                accent: .green
+            ),
+            AddGoalCoachStep(
+                emoji: "🔁",
+                title: "Repeat Schedule",
+                message: "Choose when your goal should appear. Daily is best for habits, while custom days work well for flexible routines.",
+                bullets: [
+                    "Daily, weekdays, weekends",
+                    "Custom selected days",
+                    "Today-only goals disappear tomorrow"
+                ],
+                accent: .teal
+            ),
+            AddGoalCoachStep(
+                emoji: "🔔",
+                title: "Add Reminders",
+                message: "Reminders help you come back at the right time. If notifications are disabled, MindSnap will guide you.",
+                bullets: [
+                    "Add one or more times",
+                    "Medicine reminders are prominent",
+                    "Permission is required"
+                ],
+                accent: .orange
+            ),
+            AddGoalCoachStep(
+                emoji: "❤️",
+                title: "Health-Compatible Goals",
+                message: "Some progress goals can use Apple Health when you allow it. If not, manual progress still works.",
+                bullets: [
+                    "Walking, running, workouts",
+                    "Optional Health permission",
+                    "Manual update is always available"
+                ],
+                accent: .pink
+            ),
+            AddGoalCoachStep(
+                emoji: "✨",
+                title: "You’re Ready",
+                message: "Create goals that are simple, realistic, and easy to repeat. Consistency matters more than intensity.",
+                bullets: [
+                    "Start with one goal",
+                    "Keep it realistic",
+                    "Tap Add Goal when ready"
+                ],
+                accent: .indigo
+            )
+        ]
+    }
+
+    private var currentAddGoalCoachStep: AddGoalCoachStep {
+        addGoalCoachSteps[addGoalCoachStep]
+    }
+
+    private var isLastAddGoalCoachStep: Bool {
+        addGoalCoachStep == addGoalCoachSteps.count - 1
+    }
+
+    private func presentAddGoalCoachMarkIfNeeded() {
+        guard !isEditMode else { return }
+        guard !hasSeenAddGoalCoachMark else { return }
+        guard !showingTimePicker else { return }
+        guard !showingPermissionDenied else { return }
+        guard !showingHealthManualNotice else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.65) {
+            guard !isEditMode else { return }
+            guard !hasSeenAddGoalCoachMark else { return }
+            guard !showingTimePicker else { return }
+            guard !showingPermissionDenied else { return }
+            guard !showingHealthManualNotice else { return }
+
+            addGoalCoachStep = 0
+
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showingAddGoalCoachMark = true
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                withAnimation(.spring(duration: 0.45, bounce: 0.30)) {
+                    addGoalCoachAnimate = true
+                }
+            }
+        }
+    }
+
+    private func nextAddGoalCoachStep() {
+        let haptic = UIImpactFeedbackGenerator(style: .light)
+        haptic.impactOccurred()
+
+        if isLastAddGoalCoachStep {
+            completeAddGoalCoachMark()
+        } else {
+            withAnimation(.easeInOut(duration: 0.20)) {
+                addGoalCoachAnimate = false
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                addGoalCoachStep += 1
+
+                withAnimation(.spring(duration: 0.42, bounce: 0.28)) {
+                    addGoalCoachAnimate = true
+                }
+            }
+        }
+    }
+
+    private func previousAddGoalCoachStep() {
+        guard addGoalCoachStep > 0 else { return }
+
+        let haptic = UIImpactFeedbackGenerator(style: .light)
+        haptic.impactOccurred()
+
+        withAnimation(.easeInOut(duration: 0.20)) {
+            addGoalCoachAnimate = false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            addGoalCoachStep -= 1
+
+            withAnimation(.spring(duration: 0.42, bounce: 0.28)) {
+                addGoalCoachAnimate = true
+            }
+        }
+    }
+
+    private func completeAddGoalCoachMark() {
+        let haptic = UINotificationFeedbackGenerator()
+        haptic.notificationOccurred(.success)
+
+        hasSeenAddGoalCoachMark = true
+
+        withAnimation(.easeInOut(duration: 0.25)) {
+            addGoalCoachAnimate = false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showingAddGoalCoachMark = false
+            }
+        }
+    }
+
+    private var addGoalCoachMarkOverlay: some View {
+        ZStack {
+            Color.black.opacity(colorScheme == .dark ? 0.82 : 0.70)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer()
+
+                addGoalCoachCard
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 34)
+                    .opacity(addGoalCoachAnimate ? 1 : 0)
+                    .offset(y: addGoalCoachAnimate ? 0 : 34)
+                    .scaleEffect(addGoalCoachAnimate ? 1 : 0.96)
+            }
+        }
+    }
+
+    private var addGoalCoachCard: some View {
+        VStack(spacing: 18) {
+            addGoalCoachProgressHeader
+            addGoalCoachEmoji
+
+            VStack(spacing: 8) {
+                Text(currentAddGoalCoachStep.title)
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundStyle(primaryText)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.86)
+
+                Text(currentAddGoalCoachStep.message)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            addGoalCoachBullets
+            addGoalCoachButtons
+        }
+        .padding(22)
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(cardFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .stroke(
+                            currentAddGoalCoachStep.accent.opacity(
+                                colorScheme == .dark ? 0.25 : 0.15
+                            ),
+                            lineWidth: 1.2
+                        )
+                )
+                .shadow(
+                    color: Color.black.opacity(colorScheme == .dark ? 0 : 0.18),
+                    radius: 26,
+                    x: 0,
+                    y: 14
+                )
+        )
+    }
+
+    private var addGoalCoachProgressHeader: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text("ADD GOAL GUIDE")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(secondaryText)
+                    .tracking(1.0)
+
+                Spacer()
+
+                Text("\(addGoalCoachStep + 1)/\(addGoalCoachSteps.count)")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(primaryText)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(rowFill)
+                            .overlay(
+                                Capsule()
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
+                    )
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(rowFill)
+                        .frame(height: 8)
+
+                    Capsule()
+                        .fill(currentAddGoalCoachStep.accent)
+                        .frame(
+                            width: geo.size.width *
+                            CGFloat(addGoalCoachStep + 1) /
+                            CGFloat(addGoalCoachSteps.count),
+                            height: 8
+                        )
+                        .animation(.spring(duration: 0.35), value: addGoalCoachStep)
+                }
+            }
+            .frame(height: 8)
+        }
+    }
+
+    private var addGoalCoachEmoji: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    currentAddGoalCoachStep.accent.opacity(
+                        colorScheme == .dark ? 0.16 : 0.09
+                    )
+                )
+                .frame(width: 96, height: 96)
+
+            Circle()
+                .fill(rowFill)
+                .frame(width: 74, height: 74)
+                .overlay(
+                    Circle()
+                        .stroke(borderColor, lineWidth: 1)
+                )
+
+            Text(currentAddGoalCoachStep.emoji)
+                .font(.system(size: 42))
+        }
+        .id("addGoalCoachEmoji-\(addGoalCoachStep)")
+        .transition(.scale.combined(with: .opacity))
+    }
+
+    private var addGoalCoachBullets: some View {
+        VStack(spacing: 8) {
+            ForEach(currentAddGoalCoachStep.bullets, id: \.self) { bullet in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(currentAddGoalCoachStep.accent)
+                        .padding(.top, 1)
+
+                    Text(bullet)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(rowFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(borderColor, lineWidth: 1)
+                )
+        )
+    }
+
+    private var addGoalCoachButtons: some View {
+        VStack(spacing: 10) {
+            Button {
+                nextAddGoalCoachStep()
+            } label: {
+                HStack(spacing: 8) {
+                    if isLastAddGoalCoachStep {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.subheadline)
+                    }
+
+                    Text(isLastAddGoalCoachStep ? "Start Creating Goals" : "Continue")
+                        .font(.headline)
+                        .fontWeight(.bold)
+
+                    if !isLastAddGoalCoachStep {
+                        Image(systemName: "arrow.right")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                    }
+                }
+                .foregroundStyle(primaryButtonText)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    Capsule()
+                        .fill(primaryButtonBackground)
+                )
+            }
+            .buttonStyle(.plain)
+
+            HStack {
+                if addGoalCoachStep > 0 {
+                    Button {
+                        previousAddGoalCoachStep()
+                    } label: {
+                        Text("Back")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Spacer()
+
+                if !isLastAddGoalCoachStep {
+                    Button {
+                        completeAddGoalCoachMark()
+                    } label: {
+                        Text("Skip Guide")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(tertiaryText)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 6)
         }
     }
 }

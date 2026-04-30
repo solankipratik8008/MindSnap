@@ -27,6 +27,7 @@
 
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 struct GoalsView: View {
 
@@ -39,9 +40,20 @@ struct GoalsView: View {
     @State private var goalToDelete: Goal? = nil
     @State private var showingDeleteAlert = false
     @State private var hasSyncedHealthThisSession = false
+    @State private var notificationService = NotificationService()
+    @State private var hasCheckedReminderPermissionThisSession = false
+    @State private var showingGoalReminderPermissionAlert = false
+    @State private var goalReminderPermissionStatus: UNAuthorizationStatus = .notDetermined
+    @State private var restoredReminderGoalCount = 0
+    @State private var showingGoalsCoachMark = false
+    @State private var goalsCoachStep = 0
+    @State private var goalsCoachAnimate = false
 
     @AppStorage("isHealthSyncEnabled")
     private var isHealthSyncEnabled = false
+    
+    @AppStorage("hasSeenGoalsCoachMark")
+    private var hasSeenGoalsCoachMark = false
 
     private let goalGridColumns = [
         GridItem(.flexible(), spacing: 12),
@@ -136,6 +148,9 @@ struct GoalsView: View {
                 hasSyncedHealthThisSession = true
                 syncHealthProgressIfNeeded()
             }
+
+            checkRestoredGoalReminderPermissionIfNeeded()
+            presentGoalsCoachMarkIfNeeded()
         }
         .onReceive(
             NotificationCenter.default.publisher(
@@ -175,6 +190,24 @@ struct GoalsView: View {
             Text(
                 "This will permanently delete \"\(goalToDelete?.name ?? "this goal")\" and all its history."
             )
+        }
+        .alert(
+            "Goal Reminders Need Permission",
+            isPresented: $showingGoalReminderPermissionAlert
+        ) {
+            if goalReminderPermissionStatus == .notDetermined {
+                Button("Enable Notifications") {
+                    requestGoalReminderPermissionAndReschedule()
+                }
+            } else {
+                Button("Open Settings") {
+                    openNotificationSettings()
+                }
+            }
+
+            Button("Not Now", role: .cancel) { }
+        } message: {
+            Text(goalReminderPermissionMessage)
         }
     }
 
@@ -229,33 +262,42 @@ struct GoalsView: View {
     // MARK: - Main Content
     // --------------------------------------------------------
     @ViewBuilder
+   
     private func mainContent(vm: GoalViewModel) -> some View {
-        ScrollView {
-            VStack(spacing: 16) {
+        ZStack {
+            ScrollView {
+                VStack(spacing: 16) {
 
-                pointsBanner(vm: vm)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 4)
-
-                if vm.showingDuplicateWarning {
-                    duplicateWarningBanner
+                    pointsBanner(vm: vm)
                         .padding(.horizontal, 16)
+                        .padding(.top, 4)
+
+                    if vm.showingDuplicateWarning {
+                        duplicateWarningBanner
+                            .padding(.horizontal, 16)
+                    }
+
+                    todaySection(vm: vm)
+
+                    if !vm.tomorrowsGoals.isEmpty {
+                        tomorrowSection(vm: vm)
+                    }
+
+                    WeeklyProgressView(viewModel: vm)
+                        .padding(.horizontal, 16)
+
+                    Spacer(minLength: 100)
                 }
-
-                todaySection(vm: vm)
-
-                if !vm.tomorrowsGoals.isEmpty {
-                    tomorrowSection(vm: vm)
-                }
-
-                WeeklyProgressView(viewModel: vm)
-                    .padding(.horizontal, 16)
-
-                Spacer(minLength: 100)
+                .padding(.bottom, 10)
             }
-            .padding(.bottom, 10)
+            .background(appBackground)
+
+            if showingGoalsCoachMark {
+                goalsCoachMarkOverlay
+                    .transition(.opacity)
+                    .zIndex(50)
+            }
         }
-        .background(appBackground)
     }
 
     // --------------------------------------------------------
@@ -748,4 +790,546 @@ struct GoalsView: View {
                 )
         )
     }
+    
+    // --------------------------------------------------------
+    // MARK: - Restored Goal Reminder Permission Check
+    // --------------------------------------------------------
+    private var goalsWithSavedReminders: [Goal] {
+        guard let vm = viewModel else { return [] }
+
+        return vm.goals.filter { goal in
+            goal.isActive && !goal.reminders.isEmpty
+        }
+    }
+
+    private var goalReminderPermissionMessage: String {
+        if restoredReminderGoalCount == 1 {
+            return "One of your goals has a saved reminder time, but notifications are currently disabled. Enable notifications so MindSnap can remind you on time."
+        } else {
+            return "\(restoredReminderGoalCount) of your goals have saved reminder times, but notifications are currently disabled. Enable notifications so MindSnap can remind you on time."
+        }
+    }
+
+    private func checkRestoredGoalReminderPermissionIfNeeded() {
+        guard !hasCheckedReminderPermissionThisSession else { return }
+
+        let reminderGoals = goalsWithSavedReminders
+        guard !reminderGoals.isEmpty else { return }
+
+        hasCheckedReminderPermissionThisSession = true
+        restoredReminderGoalCount = reminderGoals.count
+
+        Task {
+            let settings = await UNUserNotificationCenter
+                .current()
+                .notificationSettings()
+
+            let status = settings.authorizationStatus
+
+            let isAllowed =
+                status == .authorized ||
+                status == .provisional ||
+                status == .ephemeral
+
+            await MainActor.run {
+                goalReminderPermissionStatus = status
+            }
+
+            if isAllowed {
+                await rescheduleSavedGoalReminders()
+            } else {
+                await MainActor.run {
+                    showingGoalReminderPermissionAlert = true
+                }
+            }
+        }
+    }
+
+    private func requestGoalReminderPermissionAndReschedule() {
+        Task {
+            let granted = await notificationService.requestPermission()
+
+            if granted {
+                await rescheduleSavedGoalReminders()
+            } else {
+                await MainActor.run {
+                    goalReminderPermissionStatus = .denied
+                    showingGoalReminderPermissionAlert = true
+                }
+            }
+        }
+    }
+
+    
+
+    
+    @MainActor
+    private func rescheduleSavedGoalReminders() async {
+        let reminderGoalSnapshots = goalsWithSavedReminders.map { goal in
+            GoalReminderSnapshot(
+                id: goal.id.uuidString,
+                name: goal.name,
+                emoji: goal.emoji,
+                activityType: goal.activityType,
+                priority: goal.priority,
+                reminders: goal.reminders,
+                repeatType: goal.repeatType
+            )
+        }
+
+        guard !reminderGoalSnapshots.isEmpty else { return }
+
+        for goal in reminderGoalSnapshots {
+            await notificationService.scheduleGoalReminders(
+                goalID: goal.id,
+                goalName: goal.name,
+                goalEmoji: goal.emoji,
+                activityType: goal.activityType,
+                priority: goal.priority,
+                reminders: goal.reminders
+            )
+
+            if goal.repeatType != GoalRepeatType.daily &&
+                goal.repeatType != GoalRepeatType.none {
+                await notificationService.scheduleGoalExpiryNotification(
+                    goalID: goal.id,
+                    goalName: goal.name,
+                    goalEmoji: goal.emoji
+                )
+            }
+        }
+    }
+
+    private func openNotificationSettings() {
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+            UIApplication.shared.open(url)
+        }
+    }
+    
+    
+    // --------------------------------------------------------
+    // MARK: - Goals Coach Mark
+    // --------------------------------------------------------
+    private struct GoalsCoachStep {
+        let emoji: String
+        let title: String
+        let message: String
+        let bullets: [String]
+        let accent: Color
+    }
+
+    private var goalsCoachSteps: [GoalsCoachStep] {
+        [
+            GoalsCoachStep(
+                emoji: "🎯",
+                title: "Build Better Routines",
+                message: "This screen helps you turn small daily actions into consistent progress.",
+                bullets: [
+                    "Create daily or custom goals",
+                    "Track habits and progress",
+                    "Build routines slowly"
+                ],
+                accent: .green
+            ),
+            GoalsCoachStep(
+                emoji: "⭐️",
+                title: "Points, Levels & Streaks",
+                message: "Every completed goal helps you earn points, grow your level, and build momentum.",
+                bullets: [
+                    "Earn points for goals",
+                    "Build your streak",
+                    "Level up over time"
+                ],
+                accent: .yellow
+            ),
+            GoalsCoachStep(
+                emoji: "🚨",
+                title: "High Priority Goals",
+                message: "Important goals appear separately so you can focus on what matters most today.",
+                bullets: [
+                    "Use high priority for must-do goals",
+                    "Completed goals move down",
+                    "Stay focused on today"
+                ],
+                accent: .red
+            ),
+            GoalsCoachStep(
+                emoji: "🔔",
+                title: "Smart Reminders",
+                message: "Goals can have reminder times. If notifications are disabled, MindSnap will warn you so you do not miss them.",
+                bullets: [
+                    "Add multiple reminder times",
+                    "Get goal notifications",
+                    "Restore reminders after reinstall"
+                ],
+                accent: .orange
+            ),
+            GoalsCoachStep(
+                emoji: "❤️",
+                title: "Apple Health Sync",
+                message: "Compatible goals like walking, running, water, and workouts can use Apple Health progress when you allow it.",
+                bullets: [
+                    "Optional Health sync",
+                    "Manual progress still works",
+                    "You control permissions"
+                ],
+                accent: .pink
+            ),
+            GoalsCoachStep(
+                emoji: "📊",
+                title: "Weekly Progress",
+                message: "The weekly card shows your progress pattern so you can understand your consistency.",
+                bullets: [
+                    "See weekly completion",
+                    "Check daily goal dots",
+                    "Spot strong and weak days"
+                ],
+                accent: .blue
+            ),
+            GoalsCoachStep(
+                emoji: "✨",
+                title: "You’re Ready",
+                message: "Start with one simple goal. Small wins are easier to keep and powerful over time.",
+                bullets: [
+                    "Tap + to add a goal",
+                    "Swipe or long-press to edit",
+                    "Keep your goals realistic"
+                ],
+                accent: .purple
+            )
+        ]
+    }
+
+    private var currentGoalsCoachStep: GoalsCoachStep {
+        goalsCoachSteps[goalsCoachStep]
+    }
+
+    private var isLastGoalsCoachStep: Bool {
+        goalsCoachStep == goalsCoachSteps.count - 1
+    }
+
+    private func presentGoalsCoachMarkIfNeeded() {
+        guard !hasSeenGoalsCoachMark else { return }
+        guard !showingAddGoal else { return }
+        guard editingGoal == nil else { return }
+        guard !showingGoalReminderPermissionAlert else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
+            guard !hasSeenGoalsCoachMark else { return }
+            guard !showingAddGoal else { return }
+            guard editingGoal == nil else { return }
+            guard !showingGoalReminderPermissionAlert else { return }
+
+            goalsCoachStep = 0
+
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showingGoalsCoachMark = true
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                withAnimation(.spring(duration: 0.45, bounce: 0.30)) {
+                    goalsCoachAnimate = true
+                }
+            }
+        }
+    }
+
+    private func nextGoalsCoachStep() {
+        let haptic = UIImpactFeedbackGenerator(style: .light)
+        haptic.impactOccurred()
+
+        if isLastGoalsCoachStep {
+            completeGoalsCoachMark()
+        } else {
+            withAnimation(.easeInOut(duration: 0.20)) {
+                goalsCoachAnimate = false
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                goalsCoachStep += 1
+
+                withAnimation(.spring(duration: 0.42, bounce: 0.28)) {
+                    goalsCoachAnimate = true
+                }
+            }
+        }
+    }
+
+    private func previousGoalsCoachStep() {
+        guard goalsCoachStep > 0 else { return }
+
+        let haptic = UIImpactFeedbackGenerator(style: .light)
+        haptic.impactOccurred()
+
+        withAnimation(.easeInOut(duration: 0.20)) {
+            goalsCoachAnimate = false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            goalsCoachStep -= 1
+
+            withAnimation(.spring(duration: 0.42, bounce: 0.28)) {
+                goalsCoachAnimate = true
+            }
+        }
+    }
+
+    private func completeGoalsCoachMark() {
+        let haptic = UINotificationFeedbackGenerator()
+        haptic.notificationOccurred(.success)
+
+        hasSeenGoalsCoachMark = true
+
+        withAnimation(.easeInOut(duration: 0.25)) {
+            goalsCoachAnimate = false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showingGoalsCoachMark = false
+            }
+        }
+    }
+
+    private var goalsCoachMarkOverlay: some View {
+        ZStack {
+            Color.black.opacity(colorScheme == .dark ? 0.82 : 0.70)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer()
+
+                goalsCoachCard
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 34)
+                    .opacity(goalsCoachAnimate ? 1 : 0)
+                    .offset(y: goalsCoachAnimate ? 0 : 34)
+                    .scaleEffect(goalsCoachAnimate ? 1 : 0.96)
+            }
+        }
+    }
+
+    private var goalsCoachCard: some View {
+        VStack(spacing: 18) {
+            goalsCoachProgressHeader
+            goalsCoachEmoji
+
+            VStack(spacing: 8) {
+                Text(currentGoalsCoachStep.title)
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundStyle(primaryText)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.86)
+
+                Text(currentGoalsCoachStep.message)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            goalsCoachBullets
+            goalsCoachButtons
+        }
+        .padding(22)
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .stroke(
+                            currentGoalsCoachStep.accent.opacity(
+                                colorScheme == .dark ? 0.25 : 0.15
+                            ),
+                            lineWidth: 1.2
+                        )
+                )
+                .shadow(
+                    color: Color.black.opacity(colorScheme == .dark ? 0 : 0.18),
+                    radius: 26,
+                    x: 0,
+                    y: 14
+                )
+        )
+    }
+
+    private var goalsCoachProgressHeader: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text("GOALS GUIDE")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(secondaryText)
+                    .tracking(1.0)
+
+                Spacer()
+
+                Text("\(goalsCoachStep + 1)/\(goalsCoachSteps.count)")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(primaryText)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(softCardBackground)
+                            .overlay(
+                                Capsule()
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
+                    )
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(softCardBackground)
+                        .frame(height: 8)
+
+                    Capsule()
+                        .fill(currentGoalsCoachStep.accent)
+                        .frame(
+                            width: geo.size.width *
+                            CGFloat(goalsCoachStep + 1) /
+                            CGFloat(goalsCoachSteps.count),
+                            height: 8
+                        )
+                        .animation(.spring(duration: 0.35), value: goalsCoachStep)
+                }
+            }
+            .frame(height: 8)
+        }
+    }
+
+    private var goalsCoachEmoji: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    currentGoalsCoachStep.accent.opacity(
+                        colorScheme == .dark ? 0.16 : 0.09
+                    )
+                )
+                .frame(width: 96, height: 96)
+
+            Circle()
+                .fill(softCardBackground)
+                .frame(width: 74, height: 74)
+                .overlay(
+                    Circle()
+                        .stroke(borderColor, lineWidth: 1)
+                )
+
+            Text(currentGoalsCoachStep.emoji)
+                .font(.system(size: 42))
+        }
+        .id("goalsCoachEmoji-\(goalsCoachStep)")
+        .transition(.scale.combined(with: .opacity))
+    }
+
+    private var goalsCoachBullets: some View {
+        VStack(spacing: 8) {
+            ForEach(currentGoalsCoachStep.bullets, id: \.self) { bullet in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(currentGoalsCoachStep.accent)
+                        .padding(.top, 1)
+
+                    Text(bullet)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(softCardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(borderColor, lineWidth: 1)
+                )
+        )
+    }
+
+    private var goalsCoachButtons: some View {
+        VStack(spacing: 10) {
+            Button {
+                nextGoalsCoachStep()
+            } label: {
+                HStack(spacing: 8) {
+                    if isLastGoalsCoachStep {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.subheadline)
+                    }
+
+                    Text(isLastGoalsCoachStep ? "Start Using Goals" : "Continue")
+                        .font(.headline)
+                        .fontWeight(.bold)
+
+                    if !isLastGoalsCoachStep {
+                        Image(systemName: "arrow.right")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                    }
+                }
+                .foregroundStyle(primaryButtonText)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    Capsule()
+                        .fill(primaryButtonBackground)
+                )
+            }
+            .buttonStyle(.plain)
+
+            HStack {
+                if goalsCoachStep > 0 {
+                    Button {
+                        previousGoalsCoachStep()
+                    } label: {
+                        Text("Back")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Spacer()
+
+                if !isLastGoalsCoachStep {
+                    Button {
+                        completeGoalsCoachMark()
+                    } label: {
+                        Text("Skip Guide")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(tertiaryText)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 6)
+        }
+    }
+    
+    private struct GoalReminderSnapshot {
+        let id: String
+        let name: String
+        let emoji: String
+        let activityType: GoalActivityType
+        let priority: GoalPriority
+        let reminders: [ReminderTime]
+        let repeatType: GoalRepeatType
+    }
 }
+

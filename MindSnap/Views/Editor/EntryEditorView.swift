@@ -306,6 +306,19 @@ struct EntryEditorView: View {
     @State private var aiDetectedMood: MoodType = .neutral
     @State private var userHasOverridden = false
     @State private var showingMoodCheckIn = false
+    
+    // ---- Editor coach mark ----
+    // ---- Coach marks ----
+    @AppStorage("hasSeenJournalFullscreenCoachMark")
+    private var hasSeenJournalFullscreenCoachMark = false
+
+    @AppStorage("hasSeenEditorCoachMark")
+    private var hasSeenEditorCoachMark = false
+
+    @State private var showJournalFullscreenCoachMark = false
+    @State private var showEditorCoachMark = false
+    @State private var editorCoachStep = 0
+    @State private var editorCoachAnimate = false
 
     // ---- Speech ----
     @State private var speechService = SpeechService()
@@ -323,9 +336,8 @@ struct EntryEditorView: View {
     @State private var pencilStrokePhase = false
 
     // ---- Coach mark ----
-    @AppStorage("hasSeenJournalFullscreenCoachMark")
-    private var hasSeenJournalFullscreenCoachMark = false
-    @State private var showJournalFullscreenCoachMark = false
+  
+   
 
     private let sentimentService = SentimentService()
     private var isEditMode: Bool { existingEntry != nil }
@@ -458,6 +470,12 @@ struct EntryEditorView: View {
                         .transition(.opacity)
                         .zIndex(20)
                 }
+
+                if showEditorCoachMark {
+                    editorCoachMarkOverlay
+                        .transition(.opacity)
+                        .zIndex(40)
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -501,7 +519,6 @@ struct EntryEditorView: View {
         .onAppear {
             if let entry = existingEntry {
                 loadExistingEntry(entry)
-                presentJournalFullscreenCoachMarkIfNeeded()
             } else {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     showingMoodCheckIn = true
@@ -510,7 +527,7 @@ struct EntryEditorView: View {
         }
         .onChange(of: showingMoodCheckIn) { _, isShowing in
             if !isShowing {
-                presentJournalFullscreenCoachMarkIfNeeded()
+                presentEditorCoachMarkIfNeeded()
             }
         }
         .onChange(of: plainText) { _, text in
@@ -1000,114 +1017,495 @@ struct EntryEditorView: View {
     // --------------------------------------------------------
     // MARK: - Coach Mark
     // --------------------------------------------------------
-    private func presentJournalFullscreenCoachMarkIfNeeded() {
-        guard !hasSeenJournalFullscreenCoachMark else { return }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+
+    // --------------------------------------------------------
+    // MARK: - Editor Coach Mark
+    // --------------------------------------------------------
+    private struct EditorCoachStep {
+        let emoji: String
+        let title: String
+        let message: String
+        let bullets: [String]
+        let accent: Color
+    }
+
+    private var editorCoachSteps: [EditorCoachStep] {
+        [
+            EditorCoachStep(
+                emoji: "📝",
+                title: "Your Private Writing Space",
+                message: "This editor is where you can write thoughts, memories, feelings, and reflections in your own way.",
+                bullets: [
+                    "Write freely",
+                    "Edit existing entries",
+                    "Save when you are ready"
+                ],
+                accent: .blue
+            ),
+            EditorCoachStep(
+                emoji: "😊",
+                title: "Mood Check-In",
+                message: "When creating a new entry, MindSnap can start with a quick mood check-in so your journal feels more personal.",
+                bullets: [
+                    "Choose how you feel",
+                    "Mood is saved with the entry",
+                    "You can adjust it later"
+                ],
+                accent: .orange
+            ),
+            EditorCoachStep(
+                emoji: "🧠",
+                title: "Smart Mood Detection",
+                message: "As you write, MindSnap can detect your mood on-device and update the mood banner without sending your journal text anywhere.",
+                bullets: [
+                    "Runs on-device",
+                    "Updates while writing",
+                    "You stay in control"
+                ],
+                accent: .purple
+            ),
+            EditorCoachStep(
+                emoji: "✍️",
+                title: "Rich Text Editor",
+                message: "Use the editor for normal writing or richer entries with formatting, lists, quotes, tables, images, and voice.",
+                bullets: [
+                    "Bold, italic, underline",
+                    "Lists and quotes",
+                    "Images and voice input"
+                ],
+                accent: .green
+            ),
+            EditorCoachStep(
+                emoji: "🎯",
+                title: "Focus Mode",
+                message: "Tap Focus when you want a cleaner writing space with fewer distractions and quick access to the useful controls.",
+                bullets: [
+                    "Bigger writing area",
+                    "Compact button to return",
+                    "Done button for keyboard"
+                ],
+                accent: .teal
+            ),
+            EditorCoachStep(
+                emoji: "🎙️",
+                title: "Voice Journaling",
+                message: "Use the microphone when you want to speak your thoughts instead of typing them.",
+                bullets: [
+                    "Tap mic to start",
+                    "Speak naturally",
+                    "Stop anytime"
+                ],
+                accent: .red
+            ),
+            EditorCoachStep(
+                emoji: "💡",
+                title: "Reflection Prompts",
+                message: "Prompts help when you want to write but do not know where to begin.",
+                bullets: [
+                    "Mood-based prompts",
+                    "Tap to insert",
+                    "Great for deeper reflection"
+                ],
+                accent: .yellow
+            ),
+            EditorCoachStep(
+                emoji: "🏷️",
+                title: "Tags & Emojis",
+                message: "Add tags and emojis to organize entries and make them easier to find later.",
+                bullets: [
+                    "Add topic tags",
+                    "Use mood emojis",
+                    "Search becomes easier"
+                ],
+                accent: .pink
+            ),
+            EditorCoachStep(
+                emoji: "🔁",
+                title: "Override Mood",
+                message: "Mood detection is helpful, but your feeling matters most. You can manually override the detected mood anytime.",
+                bullets: [
+                    "Tap any mood",
+                    "Use your own judgement",
+                    "Reset back to detection"
+                ],
+                accent: .indigo
+            ),
+            EditorCoachStep(
+                emoji: "✨",
+                title: "You’re Ready",
+                message: "Write honestly, save when ready, and let MindSnap help you build a meaningful private journal over time.",
+                bullets: [
+                    "Use Save or Update",
+                    "Your entry stays private",
+                    "Come back anytime"
+                ],
+                accent: .green
+            )
+        ]
+    }
+
+    private var currentEditorCoachStep: EditorCoachStep {
+        editorCoachSteps[editorCoachStep]
+    }
+
+    private var isLastEditorCoachStep: Bool {
+        editorCoachStep == editorCoachSteps.count - 1
+    }
+
+    private func presentEditorCoachMarkIfNeeded() {
+        guard !isEditMode else { return }
+        guard !hasSeenEditorCoachMark else { return }
+        guard !showingMoodCheckIn else { return }
+        guard !showingImagePicker else { return }
+        guard !showingSpeechError else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+            guard !isEditMode else { return }
+            guard !hasSeenEditorCoachMark else { return }
             guard !showingMoodCheckIn else { return }
+            guard !showingImagePicker else { return }
+            guard !showingSpeechError else { return }
 
-            withAnimation(.easeInOut(duration: 0.22)) {
-                showJournalFullscreenCoachMark = true
+            editorCoachStep = 0
+
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showEditorCoachMark = true
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                withAnimation(.spring(duration: 0.45, bounce: 0.30)) {
+                    editorCoachAnimate = true
+                }
+            }
+        }
+    }
+
+    private func nextEditorCoachStep() {
+        let haptic = UIImpactFeedbackGenerator(style: .light)
+        haptic.impactOccurred()
+
+        if isLastEditorCoachStep {
+            completeEditorCoachMark()
+        } else {
+            withAnimation(.easeInOut(duration: 0.20)) {
+                editorCoachAnimate = false
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                editorCoachStep += 1
+
+                withAnimation(.spring(duration: 0.42, bounce: 0.28)) {
+                    editorCoachAnimate = true
+                }
+            }
+        }
+    }
+
+    private func previousEditorCoachStep() {
+        guard editorCoachStep > 0 else { return }
+
+        let haptic = UIImpactFeedbackGenerator(style: .light)
+        haptic.impactOccurred()
+
+        withAnimation(.easeInOut(duration: 0.20)) {
+            editorCoachAnimate = false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            editorCoachStep -= 1
+
+            withAnimation(.spring(duration: 0.42, bounce: 0.28)) {
+                editorCoachAnimate = true
+            }
+        }
+    }
+    
+    private func completeEditorCoachMark() {
+        let haptic = UINotificationFeedbackGenerator()
+        haptic.notificationOccurred(.success)
+
+        hasSeenEditorCoachMark = true
+
+        withAnimation(.easeInOut(duration: 0.25)) {
+            editorCoachAnimate = false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showEditorCoachMark = false
             }
         }
     }
 
     private func dismissJournalFullscreenCoachMark() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            showJournalFullscreenCoachMark = false
-            hasSeenJournalFullscreenCoachMark = true
+        let haptic = UINotificationFeedbackGenerator()
+        haptic.notificationOccurred(.success)
+
+        hasSeenJournalFullscreenCoachMark = true
+
+        withAnimation(.easeInOut(duration: 0.25)) {
+            editorCoachAnimate = false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showJournalFullscreenCoachMark = false
+            }
+        }
+    }
+    
+    private var editorCoachMarkOverlay: some View {
+        ZStack {
+            Color.black.opacity(colorScheme == .dark ? 0.82 : 0.70)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer()
+
+                editorCoachCard
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 34)
+                    .opacity(editorCoachAnimate ? 1 : 0)
+                    .offset(y: editorCoachAnimate ? 0 : 34)
+                    .scaleEffect(editorCoachAnimate ? 1 : 0.96)
+            }
         }
     }
 
     private var journalFullscreenCoachMarkOverlay: some View {
         ZStack {
-            Color.black.opacity(colorScheme == .dark ? 0.42 : 0.18)
+            Color.black.opacity(colorScheme == .dark ? 0.82 : 0.70)
                 .ignoresSafeArea()
-                .onTapGesture {
-                    dismissJournalFullscreenCoachMark()
-                }
 
-            VStack {
+            VStack(spacing: 0) {
                 Spacer()
-                    .frame(height: 290)
 
-                HStack {
-                    Spacer()
-
-                    VStack(alignment: .trailing, spacing: 8) {
-                        Image(systemName: "arrow.up")
-                            .font(.title3.weight(.bold))
-                            .foregroundStyle(primaryText)
-                            .padding(.trailing, 92)
-
-                        coachMarkBubble(
-                            title: "Focus Writing",
-                            message: "Tap Focus to open a clean writing space with fewer distractions.",
-                            buttonTitle: "Got it"
-                        ) {
-                            dismissJournalFullscreenCoachMark()
-                        }
-                    }
-                    .padding(.trailing, 30)
-                }
-
-                Spacer()
+                editorCoachCard
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 34)
+                    .opacity(editorCoachAnimate ? 1 : 0)
+                    .offset(y: editorCoachAnimate ? 0 : 34)
+                    .scaleEffect(editorCoachAnimate ? 1 : 0.96)
             }
         }
     }
 
-    private func coachMarkBubble(
-        title: String,
-        message: String,
-        buttonTitle: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
-                .fontWeight(.bold)
-                .foregroundStyle(primaryText)
+    private var editorCoachCard: some View {
+        VStack(spacing: 18) {
+            editorCoachProgressHeader
+            editorCoachEmoji
 
-            Text(message)
-                .font(.subheadline)
-                .foregroundStyle(secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 8) {
+                Text(currentEditorCoachStep.title)
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundStyle(primaryText)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.86)
 
+                Text(currentEditorCoachStep.message)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            editorCoachBullets
+            editorCoachButtons
+        }
+        .padding(22)
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .stroke(
+                            currentEditorCoachStep.accent.opacity(
+                                colorScheme == .dark ? 0.25 : 0.15
+                            ),
+                            lineWidth: 1.2
+                        )
+                )
+                .shadow(
+                    color: Color.black.opacity(colorScheme == .dark ? 0 : 0.18),
+                    radius: 26,
+                    x: 0,
+                    y: 14
+                )
+        )
+    }
+
+    private var editorCoachProgressHeader: some View {
+        VStack(spacing: 10) {
             HStack {
+                Text("EDITOR GUIDE")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(secondaryText)
+                    .tracking(1.0)
+
                 Spacer()
 
-                Button(buttonTitle) {
-                    action()
+                Text("\(editorCoachStep + 1)/\(editorCoachSteps.count)")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(primaryText)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(chipBackground)
+                            .overlay(
+                                Capsule()
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
+                    )
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(chipBackground)
+                        .frame(height: 8)
+
+                    Capsule()
+                        .fill(currentEditorCoachStep.accent)
+                        .frame(
+                            width: geo.size.width *
+                            CGFloat(editorCoachStep + 1) /
+                            CGFloat(editorCoachSteps.count),
+                            height: 8
+                        )
+                        .animation(.spring(duration: 0.35), value: editorCoachStep)
                 }
-                .font(.subheadline)
-                .fontWeight(.semibold)
+            }
+            .frame(height: 8)
+        }
+    }
+
+    private var editorCoachEmoji: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    currentEditorCoachStep.accent.opacity(
+                        colorScheme == .dark ? 0.16 : 0.09
+                    )
+                )
+                .frame(width: 96, height: 96)
+
+            Circle()
+                .fill(chipBackground)
+                .frame(width: 74, height: 74)
+                .overlay(
+                    Circle()
+                        .stroke(borderColor, lineWidth: 1)
+                )
+
+            Text(currentEditorCoachStep.emoji)
+                .font(.system(size: 42))
+        }
+        .id("editorCoachEmoji-\(editorCoachStep)")
+        .transition(.scale.combined(with: .opacity))
+    }
+
+    private var editorCoachBullets: some View {
+        VStack(spacing: 8) {
+            ForEach(currentEditorCoachStep.bullets, id: \.self) { bullet in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(currentEditorCoachStep.accent)
+                        .padding(.top, 1)
+
+                    Text(bullet)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(chipBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(borderColor, lineWidth: 1)
+                )
+        )
+    }
+
+    private var editorCoachButtons: some View {
+        VStack(spacing: 10) {
+            Button {
+                nextEditorCoachStep()
+            } label: {
+                HStack(spacing: 8) {
+                    if isLastEditorCoachStep {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.subheadline)
+                    }
+
+                    Text(isLastEditorCoachStep ? "Start Writing" : "Continue")
+                        .font(.headline)
+                        .fontWeight(.bold)
+
+                    if !isLastEditorCoachStep {
+                        Image(systemName: "arrow.right")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                    }
+                }
                 .foregroundStyle(primaryButtonText)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
                 .background(
                     Capsule()
                         .fill(primaryButtonBackground)
                 )
-                .buttonStyle(.plain)
             }
+            .buttonStyle(.plain)
+
+            HStack {
+                if editorCoachStep > 0 {
+                    Button {
+                        previousEditorCoachStep()
+                    } label: {
+                        Text("Back")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Spacer()
+
+                if !isLastEditorCoachStep {
+                    Button {
+                        completeEditorCoachMark()
+                    } label: {
+                        Text("Skip Guide")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(tertiaryText)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 6)
         }
-        .padding(16)
-        .frame(maxWidth: 270, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(cardBackground)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(borderColor, lineWidth: 1)
-                )
-                .shadow(
-                    color: Color.black.opacity(0.16),
-                    radius: 18,
-                    x: 0,
-                    y: 10
-                )
-        )
     }
+   
+
+  
 
     // --------------------------------------------------------
     // MARK: - Focus Mode Helper

@@ -33,6 +33,9 @@ struct HomeView: View {
     @AppStorage("homeMoodOverrideRaw")
     private var homeMoodOverrideRaw = ""
     
+    @AppStorage("hasSeenHomeCoachMark")
+    private var hasSeenHomeCoachMark = false
+    
     @State private var showingEditor = false
     @State private var selectedEntry: JournalEntry? = nil
     @State private var showingDeleteAlert = false
@@ -42,7 +45,15 @@ struct HomeView: View {
     @State private var showingHomeMoodPicker = false
     @State private var selectedMoodFilter: MoodType? = nil
     @State private var previousStreakCount: Int = 0
+    @State private var entryAuthService = AuthService()
+    @State private var unlockingEntryID: UUID? = nil
+    @State private var lockErrorMessage: String? = nil
     
+    @State private var showingHomeCoachMark = false
+    @State private var homeCoachStep = 0
+    @State private var homeCoachAnimate = false
+
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.colorScheme) private var colorScheme
     
     // --------------------------------------------------------
@@ -126,6 +137,12 @@ struct HomeView: View {
                     .ignoresSafeArea()
                 
                 contentScrollView
+
+                if showingHomeCoachMark {
+                    homeCoachMarkOverlay
+                        .transition(.opacity)
+                        .zIndex(50)
+                }
             }
             .navigationTitle("MindSnap")
             .navigationBarTitleDisplayMode(.large)
@@ -200,12 +217,23 @@ struct HomeView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
+        .alert("Locked Journal", isPresented: Binding(
+            get: { lockErrorMessage != nil },
+            set: { if !$0 { lockErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) {
+                lockErrorMessage = nil
+            }
+        } message: {
+            Text(lockErrorMessage ?? "")
+        }
         .onChange(of: searchText) { _, text in
             viewModel.searchText = text
         }
         .onAppear {
             previousStreakCount = viewModel.streakCount
             viewModel.fetchEntries()
+            presentHomeCoachMarkIfNeeded()
         }
         .onChange(of: viewModel.streakCount) { _, newStreak in
             checkStreakMilestone(newStreak: newStreak)
@@ -660,13 +688,36 @@ struct HomeView: View {
     // --------------------------------------------------------
     private func entryRow(entry: JournalEntry) -> some View {
         EntryRowView(entry: entry)
+            .overlay(alignment: .topTrailing) {
+                if unlockingEntryID == entry.id {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(primaryText)
+                        .padding(10)
+                        .background(
+                            Circle()
+                                .fill(cardBackground)
+                                .overlay(
+                                    Circle()
+                                        .stroke(borderColor, lineWidth: 1)
+                                )
+                        )
+                        .padding(12)
+                }
+            }
             .onTapGesture {
-                let haptic = UIImpactFeedbackGenerator(style: .light)
-                haptic.impactOccurred()
-                selectedEntry = entry
-                showingEditor = true
+                openEntry(entry)
             }
             .contextMenu {
+                Button {
+                    toggleEntryLock(entry)
+                } label: {
+                    Label(
+                        entry.isLocked ? "Unlock Entry" : "Lock Entry",
+                        systemImage: entry.isLocked ? "lock.open" : "lock"
+                    )
+                }
+
                 Button {
                     viewModel.togglePin(entry)
                 } label: {
@@ -675,22 +726,35 @@ struct HomeView: View {
                         systemImage: entry.isPinned ? "pin.slash" : "pin"
                     )
                 }
-                
+
                 Button {
-                    selectedEntry = entry
-                    showingEditor = true
+                    openEntry(entry)
                 } label: {
-                    Label("Edit", systemImage: "pencil")
+                    Label(
+                        entry.isLocked ? "Unlock & Edit" : "Edit",
+                        systemImage: entry.isLocked ? "lock.open" : "pencil"
+                    )
                 }
-                
+
                 Divider()
-                
+
                 Button(role: .destructive) {
                     entryToDelete = entry
                     showingDeleteAlert = true
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
+            }
+            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                Button {
+                    toggleEntryLock(entry)
+                } label: {
+                    Label(
+                        entry.isLocked ? "Unlock" : "Lock",
+                        systemImage: entry.isLocked ? "lock.open" : "lock"
+                    )
+                }
+                .tint(entry.isLocked ? .green : .black)
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button(role: .destructive) {
@@ -699,15 +763,17 @@ struct HomeView: View {
                 } label: {
                     Label("Delete", systemImage: "trash")
                 }
-                
+
                 Button {
-                    selectedEntry = entry
-                    showingEditor = true
+                    openEntry(entry)
                 } label: {
-                    Label("Edit", systemImage: "pencil")
+                    Label(
+                        entry.isLocked ? "Unlock" : "Edit",
+                        systemImage: entry.isLocked ? "lock.open" : "pencil"
+                    )
                 }
                 .tint(.blue)
-                
+
                 Button {
                     viewModel.togglePin(entry)
                 } label: {
@@ -838,6 +904,499 @@ struct HomeView: View {
         }
     }
     
+    private func openEntry(_ entry: JournalEntry) {
+        let haptic = UIImpactFeedbackGenerator(style: .light)
+        haptic.impactOccurred()
+
+        if entry.isLocked {
+            unlockAndOpenEntry(entry)
+        } else {
+            selectedEntry = entry
+            showingEditor = true
+        }
+    }
+
+    private func unlockAndOpenEntry(_ entry: JournalEntry) {
+        unlockingEntryID = entry.id
+
+        Task {
+            let success = await entryAuthService.authenticateForProtectedEntry(
+                reason: "Unlock this private journal entry"
+            )
+
+            await MainActor.run {
+                unlockingEntryID = nil
+
+                if success {
+                    selectedEntry = entry
+                    showingEditor = true
+                } else {
+                    lockErrorMessage = entryAuthService.authError ??
+                    "This journal entry is locked."
+                }
+            }
+        }
+    }
+
+    private func toggleEntryLock(_ entry: JournalEntry) {
+        if entry.isLocked {
+            unlockAndToggleEntryLock(entry)
+        } else {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                entry.isLocked = true
+            }
+
+            saveEntryLockState()
+
+            let haptic = UINotificationFeedbackGenerator()
+            haptic.notificationOccurred(.success)
+        }
+    }
+
+    private func unlockAndToggleEntryLock(_ entry: JournalEntry) {
+        unlockingEntryID = entry.id
+
+        Task {
+            let success = await entryAuthService.authenticateForProtectedEntry(
+                reason: "Unlock this journal entry to remove the lock"
+            )
+
+            await MainActor.run {
+                unlockingEntryID = nil
+
+                if success {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        entry.isLocked = false
+                    }
+
+                    saveEntryLockState()
+
+                    let haptic = UINotificationFeedbackGenerator()
+                    haptic.notificationOccurred(.success)
+                } else {
+                    lockErrorMessage = entryAuthService.authError ??
+                    "Could not unlock this journal entry."
+                }
+            }
+        }
+    }
+
+    private func saveEntryLockState() {
+        do {
+            try modelContext.save()
+        } catch {
+            lockErrorMessage = "Could not update journal lock. Please try again."
+            print("Failed to save journal lock state: \(error)")
+        }
+    }
+    
+    
+    // --------------------------------------------------------
+    // MARK: - Home Coach Mark
+    // --------------------------------------------------------
+    private struct HomeCoachStep {
+        let emoji: String
+        let title: String
+        let message: String
+        let bullets: [String]
+        let accent: Color
+    }
+
+    private var homeCoachSteps: [HomeCoachStep] {
+        [
+            HomeCoachStep(
+                emoji: "🏠",
+                title: "Welcome to Your Home",
+                message: "This is your private journal dashboard where you can write, search, protect, and revisit your thoughts.",
+                bullets: [
+                    "See your daily mood",
+                    "Track your journal streak",
+                    "Open your saved entries"
+                ],
+                accent: .blue
+            ),
+            HomeCoachStep(
+                emoji: "✍️",
+                title: "Write a New Entry",
+                message: "Tap New Entry whenever you want to capture a thought, feeling, memory, or reflection.",
+                bullets: [
+                    "Rich text editor",
+                    "Mood detection",
+                    "Tags, prompts, voice, and images"
+                ],
+                accent: .purple
+            ),
+            HomeCoachStep(
+                emoji: "🔍",
+                title: "Find Anything Fast",
+                message: "Use search and filters when your journal grows. You can find old entries by mood, keyword, tags, or memories.",
+                bullets: [
+                    "Search entry text",
+                    "Filter by mood",
+                    "Clear filters anytime"
+                ],
+                accent: .teal
+            ),
+            HomeCoachStep(
+                emoji: "📌",
+                title: "Pin Important Entries",
+                message: "Long-press or swipe an entry to pin meaningful memories so they stay easy to find.",
+                bullets: [
+                    "Pin special moments",
+                    "Unpin anytime",
+                    "Use long-press menu"
+                ],
+                accent: .orange
+            ),
+            HomeCoachStep(
+                emoji: "🔒",
+                title: "Lock Private Journals",
+                message: "Some thoughts are extra private. Lock any journal entry and unlock it with Face ID, Touch ID, or passcode.",
+                bullets: [
+                    "Hide journal preview",
+                    "Unlock before editing",
+                    "Protect sensitive entries"
+                ],
+                accent: .green
+            ),
+            HomeCoachStep(
+                emoji: "✨",
+                title: "You’re Ready",
+                message: "Small reflections become powerful over time. Write honestly, protect what matters, and let MindSnap help you understand your patterns.",
+                bullets: [
+                    "Swipe for quick actions",
+                    "Long-press for more options",
+                    "Keep building your journal"
+                ],
+                accent: .yellow
+            )
+        ]
+    }
+
+    private var currentHomeCoachStep: HomeCoachStep {
+        homeCoachSteps[homeCoachStep]
+    }
+
+    private var isLastHomeCoachStep: Bool {
+        homeCoachStep == homeCoachSteps.count - 1
+    }
+
+    private func presentHomeCoachMarkIfNeeded() {
+        guard !hasSeenHomeCoachMark else { return }
+        guard !showingEditor else { return }
+        guard !showingHomeMoodPicker else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+            guard !hasSeenHomeCoachMark else { return }
+            guard !showingEditor else { return }
+            guard !showingHomeMoodPicker else { return }
+
+            homeCoachStep = 0
+
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showingHomeCoachMark = true
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                withAnimation(.spring(duration: 0.45, bounce: 0.30)) {
+                    homeCoachAnimate = true
+                }
+            }
+        }
+    }
+
+    private func nextHomeCoachStep() {
+        let haptic = UIImpactFeedbackGenerator(style: .light)
+        haptic.impactOccurred()
+
+        if isLastHomeCoachStep {
+            completeHomeCoachMark()
+        } else {
+            withAnimation(.easeInOut(duration: 0.20)) {
+                homeCoachAnimate = false
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                homeCoachStep += 1
+
+                withAnimation(.spring(duration: 0.42, bounce: 0.28)) {
+                    homeCoachAnimate = true
+                }
+            }
+        }
+    }
+
+    private func previousHomeCoachStep() {
+        guard homeCoachStep > 0 else { return }
+
+        let haptic = UIImpactFeedbackGenerator(style: .light)
+        haptic.impactOccurred()
+
+        withAnimation(.easeInOut(duration: 0.20)) {
+            homeCoachAnimate = false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            homeCoachStep -= 1
+
+            withAnimation(.spring(duration: 0.42, bounce: 0.28)) {
+                homeCoachAnimate = true
+            }
+        }
+    }
+
+    private func completeHomeCoachMark() {
+        let haptic = UINotificationFeedbackGenerator()
+        haptic.notificationOccurred(.success)
+
+        hasSeenHomeCoachMark = true
+
+        withAnimation(.easeInOut(duration: 0.25)) {
+            homeCoachAnimate = false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showingHomeCoachMark = false
+            }
+        }
+    }
+
+    private var homeCoachMarkOverlay: some View {
+        ZStack {
+            Color.black.opacity(colorScheme == .dark ? 0.82 : 0.70)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer()
+
+                homeCoachCard
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 34)
+                    .opacity(homeCoachAnimate ? 1 : 0)
+                    .offset(y: homeCoachAnimate ? 0 : 34)
+                    .scaleEffect(homeCoachAnimate ? 1 : 0.96)
+            }
+        }
+    }
+
+    private var homeCoachCard: some View {
+        VStack(spacing: 18) {
+            homeCoachProgressHeader
+
+            homeCoachEmoji
+
+            VStack(spacing: 8) {
+                Text(currentHomeCoachStep.title)
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundStyle(primaryText)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.86)
+
+                Text(currentHomeCoachStep.message)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            homeCoachBullets
+
+            homeCoachButtons
+        }
+        .padding(22)
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(cardBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .stroke(
+                            currentHomeCoachStep.accent.opacity(
+                                colorScheme == .dark ? 0.25 : 0.15
+                            ),
+                            lineWidth: 1.2
+                        )
+                )
+                .shadow(
+                    color: Color.black.opacity(colorScheme == .dark ? 0 : 0.18),
+                    radius: 26,
+                    x: 0,
+                    y: 14
+                )
+        )
+    }
+
+    private var homeCoachProgressHeader: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text("HOME GUIDE")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(secondaryText)
+                    .tracking(1.0)
+
+                Spacer()
+
+                Text("\(homeCoachStep + 1)/\(homeCoachSteps.count)")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(primaryText)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(chipBackground)
+                            .overlay(
+                                Capsule()
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
+                    )
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(chipBackground)
+                        .frame(height: 8)
+
+                    Capsule()
+                        .fill(currentHomeCoachStep.accent)
+                        .frame(
+                            width: geo.size.width *
+                            CGFloat(homeCoachStep + 1) /
+                            CGFloat(homeCoachSteps.count),
+                            height: 8
+                        )
+                        .animation(
+                            .spring(duration: 0.35),
+                            value: homeCoachStep
+                        )
+                }
+            }
+            .frame(height: 8)
+        }
+    }
+
+    private var homeCoachEmoji: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    currentHomeCoachStep.accent.opacity(
+                        colorScheme == .dark ? 0.16 : 0.09
+                    )
+                )
+                .frame(width: 96, height: 96)
+
+            Circle()
+                .fill(chipBackground)
+                .frame(width: 74, height: 74)
+                .overlay(
+                    Circle()
+                        .stroke(borderColor, lineWidth: 1)
+                )
+
+            Text(currentHomeCoachStep.emoji)
+                .font(.system(size: 42))
+        }
+        .id("homeCoachEmoji-\(homeCoachStep)")
+        .transition(.scale.combined(with: .opacity))
+    }
+
+    private var homeCoachBullets: some View {
+        VStack(spacing: 8) {
+            ForEach(currentHomeCoachStep.bullets, id: \.self) { bullet in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(currentHomeCoachStep.accent)
+                        .padding(.top, 1)
+
+                    Text(bullet)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(chipBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(borderColor, lineWidth: 1)
+                )
+        )
+    }
+
+    private var homeCoachButtons: some View {
+        VStack(spacing: 10) {
+            Button {
+                nextHomeCoachStep()
+            } label: {
+                HStack(spacing: 8) {
+                    if isLastHomeCoachStep {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.subheadline)
+                    }
+
+                    Text(isLastHomeCoachStep ? "Start Using Home" : "Continue")
+                        .font(.headline)
+                        .fontWeight(.bold)
+
+                    if !isLastHomeCoachStep {
+                        Image(systemName: "arrow.right")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                    }
+                }
+                .foregroundStyle(primaryButtonText)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    Capsule()
+                        .fill(primaryButtonBackground)
+                )
+            }
+            .buttonStyle(.plain)
+
+            HStack {
+                if homeCoachStep > 0 {
+                    Button {
+                        previousHomeCoachStep()
+                    } label: {
+                        Text("Back")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Spacer()
+
+                if !isLastHomeCoachStep {
+                    Button {
+                        completeHomeCoachMark()
+                    } label: {
+                        Text("Skip Guide")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(tertiaryText)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 6)
+        }
+    }
     // --------------------------------------------------------
     // MARK: - Helpers
     // --------------------------------------------------------

@@ -95,6 +95,47 @@ final class AuthService {
         }
     }
 
+    
+    // --------------------------------------------------------
+    // authenticateForProtectedEntry()
+    //
+    // Used for opening one locked journal entry.
+    // This does NOT change app lock state.
+    // It returns true/false so HomeView can decide whether to open.
+    // --------------------------------------------------------
+    func authenticateForProtectedEntry(
+        reason: String = "Unlock this private journal entry"
+    ) async -> Bool {
+        context = LAContext()
+
+        await MainActor.run {
+            authError = nil
+        }
+
+        do {
+            let success = try await context.evaluatePolicy(
+                .deviceOwnerAuthentication,
+                localizedReason: reason
+            )
+
+            await MainActor.run {
+                if success {
+                    let haptic = UINotificationFeedbackGenerator()
+                    haptic.notificationOccurred(.success)
+                }
+            }
+
+            return success
+        } catch {
+            await MainActor.run {
+                let haptic = UINotificationFeedbackGenerator()
+                haptic.notificationOccurred(.error)
+                authError = handleAuthError(error)
+            }
+
+            return false
+        }
+    }
     // --------------------------------------------------------
     // lockApp()
     //

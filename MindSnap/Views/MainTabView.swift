@@ -48,8 +48,8 @@ struct MainTabView: View {
     @AppStorage("isFaceIDEnabled")
     private var isFaceIDEnabled = false
 
-    @AppStorage("hasSeenTutorial")
-    private var hasSeenTutorial = false
+//    @AppStorage("hasSeenTutorial")
+//    private var hasSeenTutorial = false
 
     // Track last active date for partial points
     @AppStorage("lastActiveDate")
@@ -97,33 +97,33 @@ struct MainTabView: View {
             }
 
             // ---- Tutorial ----
-            if !hasSeenTutorial {
-                CoachMarkView(
-                    isShowingTutorial: Binding(
-                        get: { !hasSeenTutorial },
-                        set: { showing in
-                            if !showing {
-                                withAnimation(
-                                    .easeInOut(duration: 0.4)
-                                ) {
-                                    hasSeenTutorial = true
-                                }
-                            }
-                        }
-                    )
-                )
-                .transition(.opacity)
-                .zIndex(2)
-            }
+//            if !hasSeenTutorial {
+//                CoachMarkView(
+//                    isShowingTutorial: Binding(
+//                        get: { !hasSeenTutorial },
+//                        set: { showing in
+//                            if !showing {
+//                                withAnimation(
+//                                    .easeInOut(duration: 0.4)
+//                                ) {
+//                                    hasSeenTutorial = true
+//                                }
+//                            }
+//                        }
+//                    )
+//                )
+//                .transition(.opacity)
+//                .zIndex(2)
+//            }
         }
         .animation(
             .easeInOut(duration: 0.4),
             value: authService.isAuthenticated
         )
-        .animation(
-            .easeInOut(duration: 0.4),
-            value: hasSeenTutorial
-        )
+//        .animation(
+//            .easeInOut(duration: 0.4),
+//            value: hasSeenTutorial
+//        )
         .onAppear {
             setupApp()
         }

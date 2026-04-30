@@ -7,7 +7,6 @@ class JournalEntry {
     // --------------------------------------------------------
     // id — Unique identifier
     // --------------------------------------------------------
-
     var id: UUID = UUID()
 
     // --------------------------------------------------------
@@ -49,6 +48,11 @@ class JournalEntry {
     var isPinned: Bool = false
 
     // --------------------------------------------------------
+    // isLocked — Requires Face ID / Touch ID / passcode to open
+    // --------------------------------------------------------
+    var isLocked: Bool = false
+
+    // --------------------------------------------------------
     // MARK: - Computed Properties
     // --------------------------------------------------------
 
@@ -70,6 +74,10 @@ class JournalEntry {
     }
 
     var previewText: String {
+        if isLocked {
+            return "Locked journal entry"
+        }
+
         return String(text.prefix(100))
     }
 
@@ -83,7 +91,8 @@ class JournalEntry {
         sentimentScore: Double = 0.0,
         tags: [String] = [],
         reflectionPromptUsed: String? = nil,
-        isPinned: Bool = false
+        isPinned: Bool = false,
+        isLocked: Bool = false
     ) {
         self.text = text
         self.richTextData = richTextData
@@ -92,5 +101,6 @@ class JournalEntry {
         self.tags = tags
         self.reflectionPromptUsed = reflectionPromptUsed
         self.isPinned = isPinned
+        self.isLocked = isLocked
     }
 }

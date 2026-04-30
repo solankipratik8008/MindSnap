@@ -103,17 +103,148 @@ struct EntryRowView: View {
     }
 
     var body: some View {
+        if entry.isLocked {
+            lockedCard
+        } else {
+            VStack(spacing: 0) {
+
+                // ================================================
+                // MOOD BANNER
+                // ================================================
+                moodBanner
+
+                // ================================================
+                // CARD BODY
+                // ================================================
+                cardBody
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(cardBackground)
+                    .shadow(
+                        color: shadowColor,
+                        radius: 14,
+                        x: 0,
+                        y: 7
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(borderColor, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+        }
+    }
+    
+    // --------------------------------------------------------
+    // MARK: - Locked Card
+    // --------------------------------------------------------
+    private var lockedCard: some View {
         VStack(spacing: 0) {
+            ZStack {
+                bannerBackground
 
-            // ================================================
-            // MOOD BANNER
-            // ================================================
-            moodBanner
+                LinearGradient(
+                    colors: [
+                        primaryText.opacity(colorScheme == .dark ? 0.10 : 0.045),
+                        Color.clear
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
 
-            // ================================================
-            // CARD BODY
-            // ================================================
-            cardBody
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(cardBackground)
+                            .frame(width: 44, height: 44)
+                            .overlay(
+                                Circle()
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
+
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(primaryText)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Locked Journal")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(primaryText)
+
+                        Text("Unlock with Face ID or passcode")
+                            .font(.caption2)
+                            .fontWeight(.medium)
+                            .foregroundStyle(secondaryText)
+                    }
+
+                    Spacer()
+
+                    VStack(alignment: .trailing, spacing: 5) {
+                        if entry.isPinned {
+                            pinnedBadge
+                        }
+
+                        Text(entry.shortDate)
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(primaryText)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+            }
+            .frame(height: entry.isPinned ? 84 : 70)
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 9) {
+                    Image(systemName: "eye.slash.fill")
+                        .font(.caption)
+                        .foregroundStyle(secondaryText)
+
+                    Text("This entry is hidden for privacy.")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(secondaryText)
+                        .lineLimit(2)
+
+                    Spacer()
+                }
+
+                HStack(spacing: 8) {
+                    Text(entry.formattedDate)
+                        .font(.caption2)
+                        .foregroundStyle(tertiaryText)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    HStack(spacing: 4) {
+                        Image(systemName: "lock.shield.fill")
+                            .font(.caption2)
+
+                        Text("Private")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(primaryText)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(chipBackground)
+                            .overlay(
+                                Capsule()
+                                    .stroke(softBorderColor, lineWidth: 1)
+                            )
+                    )
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 13)
+            .background(cardBodyBackground)
         }
         .background(
             RoundedRectangle(cornerRadius: 20)

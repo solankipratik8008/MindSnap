@@ -22,6 +22,7 @@ import SwiftUI
 import SwiftData
 import UserNotifications
 import WidgetKit
+import CloudKit
 
 // --------------------------------------------------------
 // CrisisResource — Data model for a crisis helpline
@@ -74,6 +75,9 @@ struct SettingsView: View {
     @AppStorage("reminderHour") private var reminderHour = 20
     @AppStorage("userName") private var userName = ""
     @AppStorage("appColorScheme") private var appColorScheme = AppColorScheme.system.rawValue
+    
+    @AppStorage("hasSeenSettingsCoachMark")
+    private var hasSeenSettingsCoachMark = false
 
     @AppStorage(
         "widgetGoalIDs",
@@ -107,6 +111,14 @@ struct SettingsView: View {
     @State private var showingNotificationDeniedAlert = false
     @State private var showingHealthPermissionAlert = false
     @State private var tempName = ""
+    
+    @State private var showingSettingsCoachMark = false
+    @State private var settingsCoachStep = 0
+    @State private var settingsCoachAnimate = false
+
+    @State private var iCloudAccountStatus: CKAccountStatus = .couldNotDetermine
+    @State private var isCheckingICloudStatus = false
+    @State private var iCloudStatusErrorMessage: String? = nil
 
     private var appVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"]
@@ -201,24 +213,34 @@ struct SettingsView: View {
     // MARK: - Body
     // --------------------------------------------------------
     var body: some View {
-        List {
-            profileSection
-            widgetGoalsSection
-            securitySection
-            appearanceSection
-            notificationsSection
-            healthSection
-            dataSection
-            supportSection
-            aboutSection
+        ZStack {
+            List {
+                profileSection
+                widgetGoalsSection
+                securitySection
+                appearanceSection
+                notificationsSection
+                healthSection
+                cloudSyncSection
+                dataSection
+                supportSection
+                aboutSection
+            }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
+            .background(appBackground)
+            
+            if showingSettingsCoachMark {
+                settingsCoachMarkOverlay
+                    .transition(.opacity)
+                    .zIndex(50)
+            }
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
         .background(appBackground)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.large)
         .tint(primaryText)
-
+        
         .alert("Clear All Data", isPresented: $showingClearDataAlert) {
             Button("Delete Everything", role: .destructive) {
                 clearJournalData()
@@ -227,7 +249,7 @@ struct SettingsView: View {
         } message: {
             Text("This will permanently delete ALL journal entries.")
         }
-
+        
         .alert("Delete Account & All Data?", isPresented: $showingDeleteAccountAlert) {
             Button("Delete Everything", role: .destructive) {
                 deleteAccountAndAllData()
@@ -236,19 +258,19 @@ struct SettingsView: View {
         } message: {
             Text("MindSnap does not create a separate server account, but this will permanently delete all MindSnap data on this device, including journal entries, goals, progress, reminders, points, preferences, and locally stored sync records. If iCloud sync is enabled, deletions are saved so they can sync through CloudKit.")
         }
-
+        
         .alert("Data Cleared", isPresented: $showingDataClearedConfirmation) {
             Button("OK", role: .cancel) { }
         } message: {
             Text("All journal entries have been deleted.")
         }
-
+        
         .alert("MindSnap Data Deleted", isPresented: $showingAccountDeletedConfirmation) {
             Button("OK", role: .cancel) { }
         } message: {
             Text("All MindSnap data and local reminders have been deleted. Health permissions are controlled by iOS Settings and can be changed there anytime.")
         }
-
+        
         .alert("Notifications Disabled", isPresented: $showingNotificationDeniedAlert) {
             Button("Open Settings") {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -261,7 +283,7 @@ struct SettingsView: View {
         } message: {
             Text("Please enable notifications for MindSnap in iOS Settings.")
         }
-
+        
         .alert("Apple Health Unavailable", isPresented: $showingHealthPermissionAlert) {
             Button("Open Settings") {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -274,16 +296,20 @@ struct SettingsView: View {
         } message: {
             Text("MindSnap needs permission to read activity data from Apple Health. You can change this anytime in iOS Settings.")
         }
-
+        
         .sheet(isPresented: $showingNameEditor) {
             nameEditorSheet
         }
-
+        
         .onAppear {
             Task {
                 await notificationService.checkAuthorizationStatus()
             }
+            
+            checkICloudSyncStatus()
+            presentSettingsCoachMarkIfNeeded()
         }
+        
     }
 
     // --------------------------------------------------------
@@ -651,6 +677,102 @@ struct SettingsView: View {
     }
 
     // --------------------------------------------------------
+    // MARK: - Cloud Sync
+    // --------------------------------------------------------
+    private var cloudSyncSection: some View {
+        Section {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 12) {
+                    settingsIcon(
+                        systemName: iCloudStatusIcon,
+                        fill: iCloudStatusColor.opacity(colorScheme == .dark ? 0.18 : 0.10),
+                        foreground: iCloudStatusColor
+                    )
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 6) {
+                            Text(iCloudStatusTitle)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(primaryText)
+
+                            if isCheckingICloudStatus {
+                                ProgressView()
+                                    .scaleEffect(0.75)
+                                    .tint(primaryText)
+                            }
+                        }
+
+                        Text(iCloudStatusMessage)
+                            .font(.caption)
+                            .foregroundStyle(secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer()
+                }
+
+                if shouldShowICloudWarning {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                            .padding(.top, 1)
+
+                        Text(iCloudWarningText)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundStyle(secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color.orange.opacity(colorScheme == .dark ? 0.13 : 0.07))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Color.orange.opacity(0.16), lineWidth: 1)
+                            )
+                    )
+                }
+
+                Button {
+                    checkICloudSyncStatus()
+                } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.caption)
+                            .fontWeight(.bold)
+
+                        Text("Refresh iCloud Status")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundStyle(primaryText)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(
+                        Capsule()
+                            .fill(rowFill)
+                            .overlay(
+                                Capsule()
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+                .disabled(isCheckingICloudStatus)
+            }
+            .padding(.vertical, 6)
+            .listRowBackground(cardFill)
+        } header: {
+            Text("Cloud Sync")
+        } footer: {
+            Text("MindSnap uses your private iCloud account for sync when iCloud is available. Apple manages the sync process, so changes may take a little time to appear on other devices.")
+        }
+    }
+
+    // --------------------------------------------------------
     // MARK: - Data
     // --------------------------------------------------------
     private var dataSection: some View {
@@ -964,6 +1086,169 @@ struct SettingsView: View {
     }
 
     // --------------------------------------------------------
+    // MARK: - iCloud Sync Status Helpers
+    // --------------------------------------------------------
+    private var storedCloudSyncMode: CloudSyncMode? {
+        guard let raw = UserDefaults.standard.string(forKey: "mindsnapCloudSyncMode") else {
+            return nil
+        }
+
+        return CloudSyncMode(rawValue: raw)
+    }
+
+    private var iCloudStatusTitle: String {
+        if let mode = storedCloudSyncMode,
+           mode != .cloudKit {
+            return mode.displayTitle
+        }
+
+        switch iCloudAccountStatus {
+        case .available:
+            return "iCloud Available"
+        case .noAccount:
+            return "iCloud Not Signed In"
+        case .restricted:
+            return "iCloud Restricted"
+        case .couldNotDetermine:
+            return "iCloud Status Unknown"
+        case .temporarilyUnavailable:
+            return "iCloud Temporarily Unavailable"
+        @unknown default:
+            return "iCloud Status Unknown"
+        }
+    }
+
+    private var iCloudStatusMessage: String {
+        if let iCloudStatusErrorMessage {
+            return iCloudStatusErrorMessage
+        }
+
+        if let mode = storedCloudSyncMode,
+           mode != .cloudKit {
+            return mode.displayMessage
+        }
+
+        switch iCloudAccountStatus {
+        case .available:
+            return "Your journals and goals can sync with iCloud when your device is online."
+        case .noAccount:
+            return "Sign in to iCloud on this iPhone to sync MindSnap data across your devices."
+        case .restricted:
+            return "iCloud access is restricted on this device, so MindSnap may not be able to sync."
+        case .couldNotDetermine:
+            return "MindSnap could not confirm iCloud status right now. Please check your connection and try again."
+        case .temporarilyUnavailable:
+            return "iCloud is temporarily unavailable. Sync should resume when iCloud is available again."
+        @unknown default:
+            return "MindSnap could not confirm iCloud status right now."
+        }
+    }
+
+    private var iCloudStatusIcon: String {
+        if let mode = storedCloudSyncMode,
+           mode != .cloudKit {
+            switch mode {
+            case .localFallback:
+                return "externaldrive.fill.badge.exclamationmark"
+            case .recoveredLocal:
+                return "wrench.and.screwdriver.fill"
+            case .memoryOnly:
+                return "exclamationmark.icloud.fill"
+            case .cloudKit:
+                break
+            }
+        }
+
+        switch iCloudAccountStatus {
+        case .available:
+            return "icloud.fill"
+        case .noAccount:
+            return "person.crop.circle.badge.exclamationmark"
+        case .restricted:
+            return "lock.icloud.fill"
+        case .couldNotDetermine:
+            return "questionmark.icloud.fill"
+        case .temporarilyUnavailable:
+            return "icloud.slash.fill"
+        @unknown default:
+            return "questionmark.icloud.fill"
+        }
+    }
+
+    private var iCloudStatusColor: Color {
+        if let mode = storedCloudSyncMode,
+           mode != .cloudKit {
+            switch mode {
+            case .localFallback, .recoveredLocal:
+                return .orange
+            case .memoryOnly:
+                return .red
+            case .cloudKit:
+                break
+            }
+        }
+
+        switch iCloudAccountStatus {
+        case .available:
+            return .green
+        case .noAccount, .restricted, .temporarilyUnavailable:
+            return .orange
+        case .couldNotDetermine:
+            return .gray
+        @unknown default:
+            return .gray
+        }
+    }
+
+    private var shouldShowICloudWarning: Bool {
+        if let mode = storedCloudSyncMode,
+           mode != .cloudKit {
+            return true
+        }
+
+        return iCloudAccountStatus != .available
+    }
+
+    private var iCloudWarningText: String {
+        if let mode = storedCloudSyncMode,
+           mode != .cloudKit {
+            switch mode {
+            case .localFallback:
+                return "MindSnap is currently using local storage. New changes may stay only on this device until CloudKit storage is available again."
+            case .recoveredLocal:
+                return "MindSnap recovered from a storage problem and recreated local storage. Please confirm your data after updating."
+            case .memoryOnly:
+                return "MindSnap is running in temporary storage mode. Data may not persist after closing the app."
+            case .cloudKit:
+                break
+            }
+        }
+
+        return "If iCloud is unavailable, new journal entries and goals may stay only on this device until iCloud is available again."
+    }
+
+    private func checkICloudSyncStatus() {
+        guard !isCheckingICloudStatus else { return }
+
+        isCheckingICloudStatus = true
+        iCloudStatusErrorMessage = nil
+
+        CKContainer(identifier: "iCloud.com.pratik.MindSnap")
+            .accountStatus { status, error in
+                DispatchQueue.main.async {
+                    self.iCloudAccountStatus = status
+                    self.isCheckingICloudStatus = false
+
+                    if let error {
+                        self.iCloudStatusErrorMessage =
+                        "MindSnap could not check iCloud right now. Please try again later."
+                        print("iCloud status check failed: \(error)")
+                    }
+                }
+            }
+    }
+
+    // --------------------------------------------------------
     // MARK: - Actions
     // --------------------------------------------------------
     private func handleReminderToggle(_ newValue: Bool) {
@@ -1152,6 +1437,458 @@ struct SettingsView: View {
         let date = Calendar.current.date(from: components) ?? Date()
         return formatter.string(from: date)
     }
+    
+    // --------------------------------------------------------
+    // MARK: - Settings Coach Mark
+    // --------------------------------------------------------
+    private struct SettingsCoachStep {
+        let emoji: String
+        let title: String
+        let message: String
+        let bullets: [String]
+        let accent: Color
+    }
+
+    private var settingsCoachSteps: [SettingsCoachStep] {
+        [
+            SettingsCoachStep(
+                emoji: "👤",
+                title: "Personalize MindSnap",
+                message: "Add your name so MindSnap feels more personal while still keeping your journal private.",
+                bullets: [
+                    "Edit your display name",
+                    "Used only inside the app",
+                    "You can change it anytime"
+                ],
+                accent: .blue
+            ),
+            SettingsCoachStep(
+                emoji: "📱",
+                title: "Customize Widgets",
+                message: "Choose what appears in your Home Screen widgets without exposing private journal text.",
+                bullets: [
+                    "Show Write Journal shortcut",
+                    "Pick up to 4 active goals",
+                    "Widgets stay privacy-safe"
+                ],
+                accent: .purple
+            ),
+            SettingsCoachStep(
+                emoji: "🔐",
+                title: "Protect Your App",
+                message: "Enable Face ID, Touch ID, or device authentication to lock MindSnap when you leave the app.",
+                bullets: [
+                    "Extra privacy layer",
+                    "Uses your device security",
+                    "Can be turned off anytime"
+                ],
+                accent: .green
+            ),
+            SettingsCoachStep(
+                emoji: "🎨",
+                title: "Choose Your Look",
+                message: "Control how MindSnap appears and whether your mood is shown on the Home screen.",
+                bullets: [
+                    "Light, dark, or system mode",
+                    "Show or hide Home mood",
+                    "Theme follows your preference"
+                ],
+                accent: .orange
+            ),
+            SettingsCoachStep(
+                emoji: "🔔",
+                title: "Daily Journal Reminders",
+                message: "Turn on a daily reminder to build a stronger journaling habit.",
+                bullets: [
+                    "Choose reminder time",
+                    "Notification permission required",
+                    "Can be disabled anytime"
+                ],
+                accent: .red
+            ),
+            SettingsCoachStep(
+                emoji: "❤️",
+                title: "Apple Health Sync",
+                message: "Health sync can auto-fill compatible progress goals like steps, distance, workouts, or water.",
+                bullets: [
+                    "Optional permission",
+                    "Used only for goal progress",
+                    "Manual progress still works"
+                ],
+                accent: .pink
+            ),
+            SettingsCoachStep(
+                emoji: "🗑️",
+                title: "Control Your Data",
+                message: "You can clear journal data or delete all MindSnap data from this device when needed.",
+                bullets: [
+                    "Clear journal entries",
+                    "Delete goals and progress",
+                    "Use carefully — deletion is serious"
+                ],
+                accent: .red
+            ),
+            SettingsCoachStep(
+                emoji: "🫶",
+                title: "Support Resources",
+                message: "MindSnap includes mental health support links because journaling should never replace real help when you need it.",
+                bullets: [
+                    "Find a Helpline",
+                    "Regional crisis resources",
+                    "Crisis Text Line"
+                ],
+                accent: .teal
+            ),
+            SettingsCoachStep(
+                emoji: "🛡️",
+                title: "Privacy & App Info",
+                message: "Review the privacy policy, app version, and important app information anytime.",
+                bullets: [
+                    "Privacy Policy",
+                    "Version and build number",
+                    "App review friendly transparency"
+                ],
+                accent: .indigo
+            ),
+            SettingsCoachStep(
+                emoji: "✨",
+                title: "You’re Ready",
+                message: "Settings gives you control over privacy, reminders, Health, widgets, appearance, and data.",
+                bullets: [
+                    "Customize your experience",
+                    "Keep privacy in your control",
+                    "Adjust anytime"
+                ],
+                accent: .yellow
+            )
+        ]
+    }
+
+    private var currentSettingsCoachStep: SettingsCoachStep {
+        settingsCoachSteps[settingsCoachStep]
+    }
+
+    private var isLastSettingsCoachStep: Bool {
+        settingsCoachStep == settingsCoachSteps.count - 1
+    }
+
+    private func presentSettingsCoachMarkIfNeeded() {
+        guard !hasSeenSettingsCoachMark else { return }
+        guard !showingNameEditor else { return }
+        guard !showingClearDataAlert else { return }
+        guard !showingDeleteAccountAlert else { return }
+        guard !showingNotificationDeniedAlert else { return }
+        guard !showingHealthPermissionAlert else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+            guard !hasSeenSettingsCoachMark else { return }
+            guard !showingNameEditor else { return }
+            guard !showingClearDataAlert else { return }
+            guard !showingDeleteAccountAlert else { return }
+            guard !showingNotificationDeniedAlert else { return }
+            guard !showingHealthPermissionAlert else { return }
+
+            settingsCoachStep = 0
+
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showingSettingsCoachMark = true
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                withAnimation(.spring(duration: 0.45, bounce: 0.30)) {
+                    settingsCoachAnimate = true
+                }
+            }
+        }
+    }
+
+    private func nextSettingsCoachStep() {
+        let haptic = UIImpactFeedbackGenerator(style: .light)
+        haptic.impactOccurred()
+
+        if isLastSettingsCoachStep {
+            completeSettingsCoachMark()
+        } else {
+            withAnimation(.easeInOut(duration: 0.20)) {
+                settingsCoachAnimate = false
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                settingsCoachStep += 1
+
+                withAnimation(.spring(duration: 0.42, bounce: 0.28)) {
+                    settingsCoachAnimate = true
+                }
+            }
+        }
+    }
+
+    private func previousSettingsCoachStep() {
+        guard settingsCoachStep > 0 else { return }
+
+        let haptic = UIImpactFeedbackGenerator(style: .light)
+        haptic.impactOccurred()
+
+        withAnimation(.easeInOut(duration: 0.20)) {
+            settingsCoachAnimate = false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            settingsCoachStep -= 1
+
+            withAnimation(.spring(duration: 0.42, bounce: 0.28)) {
+                settingsCoachAnimate = true
+            }
+        }
+    }
+
+    private func completeSettingsCoachMark() {
+        let haptic = UINotificationFeedbackGenerator()
+        haptic.notificationOccurred(.success)
+
+        hasSeenSettingsCoachMark = true
+
+        withAnimation(.easeInOut(duration: 0.25)) {
+            settingsCoachAnimate = false
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                showingSettingsCoachMark = false
+            }
+        }
+    }
+
+    private var settingsCoachMarkOverlay: some View {
+        ZStack {
+            Color.black.opacity(colorScheme == .dark ? 0.82 : 0.70)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                Spacer()
+
+                settingsCoachCard
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 34)
+                    .opacity(settingsCoachAnimate ? 1 : 0)
+                    .offset(y: settingsCoachAnimate ? 0 : 34)
+                    .scaleEffect(settingsCoachAnimate ? 1 : 0.96)
+            }
+        }
+    }
+
+    private var settingsCoachCard: some View {
+        VStack(spacing: 18) {
+            settingsCoachProgressHeader
+            settingsCoachEmoji
+
+            VStack(spacing: 8) {
+                Text(currentSettingsCoachStep.title)
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundStyle(primaryText)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.86)
+
+                Text(currentSettingsCoachStep.message)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundStyle(secondaryText)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            settingsCoachBullets
+            settingsCoachButtons
+        }
+        .padding(22)
+        .background(
+            RoundedRectangle(cornerRadius: 30, style: .continuous)
+                .fill(cardFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 30, style: .continuous)
+                        .stroke(
+                            currentSettingsCoachStep.accent.opacity(
+                                colorScheme == .dark ? 0.25 : 0.15
+                            ),
+                            lineWidth: 1.2
+                        )
+                )
+                .shadow(
+                    color: Color.black.opacity(colorScheme == .dark ? 0 : 0.18),
+                    radius: 26,
+                    x: 0,
+                    y: 14
+                )
+        )
+    }
+
+    private var settingsCoachProgressHeader: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text("SETTINGS GUIDE")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(secondaryText)
+                    .tracking(1.0)
+
+                Spacer()
+
+                Text("\(settingsCoachStep + 1)/\(settingsCoachSteps.count)")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundStyle(primaryText)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(rowFill)
+                            .overlay(
+                                Capsule()
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
+                    )
+            }
+
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(rowFill)
+                        .frame(height: 8)
+
+                    Capsule()
+                        .fill(currentSettingsCoachStep.accent)
+                        .frame(
+                            width: geo.size.width *
+                            CGFloat(settingsCoachStep + 1) /
+                            CGFloat(settingsCoachSteps.count),
+                            height: 8
+                        )
+                        .animation(.spring(duration: 0.35), value: settingsCoachStep)
+                }
+            }
+            .frame(height: 8)
+        }
+    }
+
+    private var settingsCoachEmoji: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    currentSettingsCoachStep.accent.opacity(
+                        colorScheme == .dark ? 0.16 : 0.09
+                    )
+                )
+                .frame(width: 96, height: 96)
+
+            Circle()
+                .fill(rowFill)
+                .frame(width: 74, height: 74)
+                .overlay(
+                    Circle()
+                        .stroke(borderColor, lineWidth: 1)
+                )
+
+            Text(currentSettingsCoachStep.emoji)
+                .font(.system(size: 42))
+        }
+        .id("settingsCoachEmoji-\(settingsCoachStep)")
+        .transition(.scale.combined(with: .opacity))
+    }
+
+    private var settingsCoachBullets: some View {
+        VStack(spacing: 8) {
+            ForEach(currentSettingsCoachStep.bullets, id: \.self) { bullet in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(currentSettingsCoachStep.accent)
+                        .padding(.top, 1)
+
+                    Text(bullet)
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundStyle(primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(rowFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(borderColor, lineWidth: 1)
+                )
+        )
+    }
+
+    private var settingsCoachButtons: some View {
+        VStack(spacing: 10) {
+            Button {
+                nextSettingsCoachStep()
+            } label: {
+                HStack(spacing: 8) {
+                    if isLastSettingsCoachStep {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.subheadline)
+                    }
+
+                    Text(isLastSettingsCoachStep ? "Start Using Settings" : "Continue")
+                        .font(.headline)
+                        .fontWeight(.bold)
+
+                    if !isLastSettingsCoachStep {
+                        Image(systemName: "arrow.right")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                    }
+                }
+                .foregroundStyle(primaryButtonText)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    Capsule()
+                        .fill(primaryButtonBackground)
+                )
+            }
+            .buttonStyle(.plain)
+
+            HStack {
+                if settingsCoachStep > 0 {
+                    Button {
+                        previousSettingsCoachStep()
+                    } label: {
+                        Text("Back")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Spacer()
+
+                if !isLastSettingsCoachStep {
+                    Button {
+                        completeSettingsCoachMark()
+                    } label: {
+                        Text("Skip Guide")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(tertiaryText)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 6)
+        }
+    }
 }
 
 // ============================================================
@@ -1185,3 +1922,4 @@ struct SettingsView: View {
     )
     .preferredColorScheme(.dark)
 }
+
