@@ -251,7 +251,116 @@ class NotificationService {
                     )
             }
     }
+    // --------------------------------------------------------
+    // MARK: - Streak Risk Reminder
+    //
+    // Schedules one gentle evening reminder if the user has an
+    // active streak but has not completed any goal today.
+    // --------------------------------------------------------
+    func scheduleStreakRiskReminder(
+        currentStreak: Int,
+        totalGoalsToday: Int
+    ) async {
+        guard await hasNotificationAuthorization() else { return }
+        guard currentStreak > 0 else { return }
+        guard totalGoalsToday > 0 else { return }
 
+        cancelStreakRiskReminder()
+
+        let calendar = Calendar.current
+        let now = Date()
+
+        var components = calendar.dateComponents(
+            [.year, .month, .day],
+            from: now
+        )
+
+        // Preferred reminder time: 8:00 PM
+        components.hour = 20
+        components.minute = 0
+
+        guard var fireDate = calendar.date(from: components) else { return }
+
+        // If it is already after 8 PM, remind gently in 10 minutes,
+        // but only if the day is not almost over.
+        if fireDate <= now {
+            guard calendar.component(.hour, from: now) < 23 else { return }
+
+            fireDate = now.addingTimeInterval(10 * 60)
+
+            components = calendar.dateComponents(
+                [.year, .month, .day, .hour, .minute],
+                from: fireDate
+            )
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Your streak is still alive 🔥"
+        content.body = streakRiskMessage(
+            currentStreak: currentStreak,
+            totalGoalsToday: totalGoalsToday
+        )
+        content.sound = .default
+        content.badge = 1
+        content.userInfo = [
+            "type": "streak_risk",
+            "url": "mindsnap://goals"
+        ]
+
+        if #available(iOS 15.0, *) {
+            content.interruptionLevel = .active
+        }
+
+        let trigger = UNCalendarNotificationTrigger(
+            dateMatching: components,
+            repeats: false
+        )
+
+        let todayKey = streakReminderDateKey(for: now)
+
+        let request = UNNotificationRequest(
+            identifier: "mindsnap-streak-risk-\(todayKey)",
+            content: content,
+            trigger: trigger
+        )
+
+        try? await UNUserNotificationCenter
+            .current()
+            .add(request)
+    }
+
+    func cancelStreakRiskReminder() {
+        UNUserNotificationCenter.current()
+            .getPendingNotificationRequests { requests in
+                let ids = requests
+                    .filter { $0.identifier.hasPrefix("mindsnap-streak-risk-") }
+                    .map { $0.identifier }
+
+                UNUserNotificationCenter.current()
+                    .removePendingNotificationRequests(withIdentifiers: ids)
+            }
+    }
+
+    private func streakReminderDateKey(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    private func streakRiskMessage(
+        currentStreak: Int,
+        totalGoalsToday: Int
+    ) -> String {
+        let messages = [
+            "Complete one small goal today to keep your \(currentStreak)-day momentum going.",
+            "One small action can protect your streak today. You still have time.",
+            "Your progress matters. Complete one goal today and keep the streak alive.",
+            "A tiny step still counts. Open MindSnap and protect your streak today.",
+            "You have \(totalGoalsToday) goal\(totalGoalsToday == 1 ? "" : "s") today. Finish one and keep your momentum alive."
+        ]
+
+        return messages.randomElement() ?? messages[0]
+    }
     // --------------------------------------------------------
     // MARK: - Expiry Notification
     // --------------------------------------------------------

@@ -62,7 +62,8 @@ class NotificationDelegate: NSObject,
                  "goal_expiry",
                  "partial_points",
                  "healthkit_sync",
-                 "health_warning":
+                 "health_warning",
+                 "streak_risk":
                 NotificationCenter.default.post(
                     name: NSNotification.Name("OpenGoalsTab"),
                     object: nil

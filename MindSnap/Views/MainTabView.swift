@@ -44,6 +44,12 @@ struct MainTabView: View {
 
     // ---- Pending tab switch after unlock ----
     @State private var pendingTabSwitch: Int? = nil
+    
+    // ---- App Update Check ----
+    @State private var showingUpdateAlert = false
+    @State private var latestAppStoreVersion: String? = nil
+    @State private var appStoreTrackURL: String? = nil
+    @State private var hasCheckedForUpdateThisSession = false
 
     @AppStorage("isFaceIDEnabled")
     private var isFaceIDEnabled = false
@@ -120,12 +126,22 @@ struct MainTabView: View {
             .easeInOut(duration: 0.4),
             value: authService.isAuthenticated
         )
+        .alert("New Update Available", isPresented: $showingUpdateAlert) {
+            Button("Update Now") {
+                openAppStoreUpdatePage()
+            }
+
+            Button("Later", role: .cancel) { }
+        } message: {
+            Text(updateAlertMessage)
+        }
 //        .animation(
 //            .easeInOut(duration: 0.4),
 //            value: hasSeenTutorial
 //        )
         .onAppear {
             setupApp()
+            checkForAppUpdateIfNeeded()
         }
         .onReceive(
             Timer.publish(
@@ -178,6 +194,94 @@ struct MainTabView: View {
         .onOpenURL { url in
             handleDeepLink(url: url)
         }
+    }
+    
+    // --------------------------------------------------------
+    // MARK: - App Update Checker
+    // --------------------------------------------------------
+    private struct AppStoreLookupResponse: Decodable {
+        let resultCount: Int
+        let results: [AppStoreLookupResult]
+    }
+
+    private struct AppStoreLookupResult: Decodable {
+        let version: String?
+        let trackViewUrl: String?
+    }
+
+    private var installedAppVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+
+    private var updateAlertMessage: String {
+        if let latestAppStoreVersion {
+            return "MindSnap \(latestAppStoreVersion) is available on the App Store. Update now to get the newest fixes and improvements."
+        }
+
+        return "A newer version of MindSnap is available on the App Store."
+    }
+
+    private func checkForAppUpdateIfNeeded() {
+        guard !hasCheckedForUpdateThisSession else { return }
+        hasCheckedForUpdateThisSession = true
+
+        guard let url = URL(
+            string: "https://itunes.apple.com/lookup?id=6764239400&country=ca"
+        ) else {
+            return
+        }
+
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                let response = try JSONDecoder().decode(
+                    AppStoreLookupResponse.self,
+                    from: data
+                )
+
+                guard let result = response.results.first,
+                      let storeVersion = result.version else {
+                    return
+                }
+
+                let installedVersion = installedAppVersion
+                let shouldShowUpdate = isVersion(
+                    storeVersion,
+                    newerThan: installedVersion
+                )
+
+                await MainActor.run {
+                    latestAppStoreVersion = storeVersion
+                    appStoreTrackURL = result.trackViewUrl
+
+                    if shouldShowUpdate {
+                        showingUpdateAlert = true
+                    }
+                }
+            } catch {
+                print("App update check failed: \(error)")
+            }
+        }
+    }
+
+    private func isVersion(
+        _ storeVersion: String,
+        newerThan installedVersion: String
+    ) -> Bool {
+        storeVersion.compare(
+            installedVersion,
+            options: .numeric
+        ) == .orderedDescending
+    }
+
+    private func openAppStoreUpdatePage() {
+        let fallbackURL = "https://apps.apple.com/ca/app/id6764239400"
+
+        guard let url = URL(string: appStoreTrackURL ?? fallbackURL) else {
+            return
+        }
+
+        UIApplication.shared.open(url)
     }
 
     // --------------------------------------------------------

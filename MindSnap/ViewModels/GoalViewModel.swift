@@ -374,6 +374,8 @@ class GoalViewModel {
             )
             let all = try modelContext.fetch(descriptor)
             goals = all.filter { $0.isActive }
+
+            refreshStreakRiskReminderSchedule()
         } catch {
             print("fetchGoals error: \(error)")
         }
@@ -391,15 +393,49 @@ class GoalViewModel {
                     )
                 ]
             )
+
             let ninetyDaysAgo = Calendar.current.date(
                 byAdding: .day, value: -90, to: Date()
             ) ?? Date()
+
             let all = try modelContext.fetch(descriptor)
+
             completions = all.filter {
                 $0.completedAt >= ninetyDaysAgo
             }
+
+            refreshStreakRiskReminderSchedule()
         } catch {
             print("fetchCompletions error: \(error)")
+        }
+    }
+    
+    // --------------------------------------------------------
+    // MARK: - Streak Risk Reminder Refresh
+    //
+    // If the user has a streak but has not completed any goal
+    // today, schedule one gentle evening reminder.
+    // If the streak is already safe today, cancel it.
+    // --------------------------------------------------------
+    private func refreshStreakRiskReminderSchedule() {
+        let totalGoalsToday = todaysGoals.count
+        let completedToday = completedTodayCount
+        let streak = overallStreak
+
+        let shouldSchedule =
+            totalGoalsToday > 0 &&
+            streak > 0 &&
+            completedToday == 0
+
+        Task {
+            if shouldSchedule {
+                await notificationService.scheduleStreakRiskReminder(
+                    currentStreak: streak,
+                    totalGoalsToday: totalGoalsToday
+                )
+            } else {
+                notificationService.cancelStreakRiskReminder()
+            }
         }
     }
 
