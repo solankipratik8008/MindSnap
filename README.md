@@ -86,9 +86,10 @@ iOS Developer | Mobile App Developer
 
 ---
 
-## 📌 Status
+Status: 
+Live on t the AppStore: 
+Version: 1.0.1
+next version is coming up...
 
-🚧 Currently under active development
-🎯 Goal: App Store release
-
+https://apps.apple.com/us/app/mindsnap-mood-goals/id6764239400
 ---
