@@ -58,10 +58,9 @@ MindSnap is a modern iOS app designed to help users build better habits, track g
 
 ---
 
-## 📱 Screenshots
+####### App is live on the App Store Check it out!!
 
-*(Add your app screenshots here)*
-
+apps.apple.com/app/mindsnap-mood-goals/id6764239400
 ---
 
 ## 🎯 Purpose
