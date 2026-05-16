@@ -112,4 +112,4 @@ This project shows:
 
 ## App Store Link
 
-MindSnap is 
+📱 App Store: https://apps.apple.com/us/app/mindsnap-mood-goals/id6764239400
