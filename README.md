@@ -85,11 +85,11 @@ iOS Developer | Mobile App Developer
 * LinkedIn: https://www.linkedin.com/in/pratikkumar-solanki-045b62365
 
 ---
-
 Status: 
 Live on t the AppStore: 
 Version: 1.0.1
 next version is coming up...
 
 https://apps.apple.com/us/app/mindsnap-mood-goals/id6764239400
+
 ---
