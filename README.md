@@ -1,95 +1,115 @@
-# 🧠 MindSnap — iOS Productivity & Wellness App
+# MindSnap - iOS Productivity & Wellness App
 
-####### App is live on the App Store Check it out!!
+MindSnap is a modern iOS productivity and wellness app designed to help users build better habits, track goals, reflect through journaling, and stay consistent with daily routines.
 
-https://apps.apple.com/us/app/mindsnap-mood-goals/id6764239400
+The app is live on the App Store and includes journaling, mood tracking, goal tracking, HealthKit integration, iCloud sync, reminders, and privacy-first data handling.
 
-MindSnap is a modern iOS app designed to help users build better habits, track goals, and reflect through journaling — all while respecting privacy.
-
----
-
-## 🚀 Features
-
-### 📓 Smart Journaling
-
-* Rich text editor with formatting & images
-* Voice-to-text journaling (on-device)
-* Mood detection & reflection prompts
-
-### 🎯 Goal Tracking System
-
-* Daily & repeating goals
-* Smart progress tracking
-* Manual + automatic updates
-
-### 🏃 Health Integration
-
-* Apple HealthKit support
-* Automatically tracks:
-
-  * Steps
-  * Distance
-  * Activity data
-* Manual override if device not present
-
-### ☁️ Cloud Sync
-
-* iCloud + CloudKit integration
-* Seamless data sync across devices
-
-### 🔔 Smart Notifications
-
-* Time-sensitive reminders
-* Daily habit reinforcement
-
-### 🔐 Privacy First
-
-* No ads
-* No tracking
-* Optional cloud + health integration
-* Data stored locally by default
+📱 App Store: https://apps.apple.com/us/app/mindsnap-mood-goals/id6764239400
 
 ---
 
-## 🛠 Tech Stack
+## App Store Status
 
-* SwiftUI
-* SwiftData
-* MVVM Architecture
-* HealthKit
-* CloudKit
-* WidgetKit
+- Status: Live on the App Store
+- Current Version: 1.0.1
+- Next version: Coming soon
 
 ---
 
+## Features
+
+### Smart Journaling
+
+- Create personal journal entries
+- Reflect on daily thoughts, moods, and goals
+- Rich journaling experience
+- Mood-based reflection support
+- Helps users build a consistent self-reflection habit
+
+### Goal Tracking
+
+- Create daily goals
+- Track goal progress
+- Support for repeating goals
+- Manual goal updates
+- Progress-based wellness tracking
+
+### Health Integration
+
+- Apple HealthKit support
+- Track steps and activity-related progress
+- Connect wellness goals with real activity data
+- Manual override support when the device is not available
+
+### Cloud Sync
+
+- iCloud and CloudKit integration
+- Sync app data across Apple devices
+- Keep user data available through the Apple ecosystem
+
+### Smart Notifications
+
+- Daily habit reminders
+- Time-sensitive notification support
+- Helps users stay consistent with journaling and goals
+
+### Privacy First
+
+- No ads
+- No tracking
+- Local-first data approach
+- Optional iCloud sync
+- Optional HealthKit access
+- User-controlled wellness data
 
 ---
 
-## 🎯 Purpose
+## Tech Stack
 
-This project demonstrates:
+- Swift
+- SwiftUI
+- SwiftData
+- MVVM
+- HealthKit
+- CloudKit
+- iCloud
+- WidgetKit
+- UserNotifications
+- Xcode
 
-* Real-world iOS app architecture
-* Apple ecosystem integration (HealthKit, iCloud)
-* Clean UI/UX design
-* Production-ready features
+---
+
+## Main App Flow
+
+1. User opens MindSnap
+2. User creates journal entries
+3. User tracks mood and reflections
+4. User creates personal goals
+5. User updates goal progress
+6. HealthKit can automatically support wellness/activity progress
+7. User receives reminders to stay consistent
+8. Data can sync through iCloud/CloudKit
 
 ---
 
-## 👨‍💻 Developer
+## Project Purpose
 
-**Pratik Solanki**
-iOS Developer | Mobile App Developer
+MindSnap was built to demonstrate a production-level iOS app using Apple ecosystem frameworks.
 
-* GitHub: https://github.com/solankipratik8008
-* LinkedIn: https://www.linkedin.com/in/pratikkumar-solanki-045b62365
+This project shows:
+
+- Real-world SwiftUI app development
+- App Store publishing experience
+- SwiftData-based local persistence
+- HealthKit integration
+- CloudKit/iCloud sync
+- MVVM architecture
+- Notification-based habit reminders
+- Privacy-first product thinking
+- Wellness and productivity app design
 
 ---
-Status: 
-Live on t the AppStore: 
-Version: 1.0.1
-next version is coming up...
 
-https://apps.apple.com/us/app/mindsnap-mood-goals/id6764239400
+## App Store Link
 
----
+MindSnap is 
