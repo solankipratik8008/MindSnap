@@ -1,5 +1,9 @@
 # 🧠 MindSnap — iOS Productivity & Wellness App
 
+####### App is live on the App Store Check it out!!
+
+https://apps.apple.com/us/app/mindsnap-mood-goals/id6764239400
+
 MindSnap is a modern iOS app designed to help users build better habits, track goals, and reflect through journaling — all while respecting privacy.
 
 ---
@@ -58,9 +62,7 @@ MindSnap is a modern iOS app designed to help users build better habits, track g
 
 ---
 
-####### App is live on the App Store Check it out!!
 
-apps.apple.com/app/mindsnap-mood-goals/id6764239400
 ---
 
 ## 🎯 Purpose
